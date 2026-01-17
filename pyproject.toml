@@ -1,3 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "protnote"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "torchmetrics==1.4.0",
+    "torcheval==0.0.7",
+    "tensorboard==2.16.2",
+    "torchdata==0.8.0",
+    "transformers==4.40.0",
+    "wandb==0.15.11",
+    "sacremoses==0.0.53",
+    "pynvml==11.5.0",
+    "wget==3.2",
+    "azureml-mlflow==1.53.0",
+    "loralib==0.1.2",
+    "obonet==1.0.0",
+    "blosum==2.0.2",
+    "biopython==1.84",
+    "umap-learn==0.5.4",
+    "tables==3.8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["protnote"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "protnote",
+    "README.md",
+]
+
 [tool.ruff]
 line-length = 140
 ignore = ["F841", "F401", "E712"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+channel-priority = "disabled"
+
+[tool.pixi.system-requirements]
+cuda = "11.8"
+
+[tool.pixi.dependencies]
+cuda-version = "11.8.*"
+
+pytorch = { version = "2.4.0.*", channel = "pytorch" }
+torchvision = { version = "0.19.0.*", channel = "pytorch" }
+pytorch-cuda = { version = "11.8.*", channel = "pytorch" }
+
+numpy = "<2.0"
+pandas = "1.5.2.*"
+scipy = "1.13.1.*"
+scikit-learn = "1.5.0.*"
+matplotlib = "3.9.*"
+seaborn = "0.13.2.*"
+ipykernel = "6.29.5.*"
+joblib = "1.2.0.*"
+
+[tool.pixi.pypi-dependencies]
+protnote = { path = ".", editable = true }
