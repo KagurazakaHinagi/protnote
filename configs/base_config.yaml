@@ -1,182 +1,189 @@
 ---
 params:
-  ############## PARAMS THAT NEED TO BE CHANGED FOR AMULET V100 VS. SANDBOX A100 ##############
+    ############## PARAMS THAT NEED TO BE CHANGED FOR AMULET V100 VS. SANDBOX A100 ##############
 
-  ### V100 ###
-  # Batch sizes
-  TRAIN_BATCH_SIZE: 8 # 8 per GPU for V100 (64 if using 8 GPUs)
-  VALIDATION_BATCH_SIZE: 8 # 32 per GPU for V100 (256 if using 8 GPUs)
-  TEST_BATCH_SIZE: 8 # 32 per GPU for V100 (256 if using 8 GPUs)
+    ### V100 ###
+    # Batch sizes
+    TRAIN_BATCH_SIZE: 8 # 8 per GPU for V100 (64 if using 8 GPUs)
+    VALIDATION_BATCH_SIZE: 8 # 32 per GPU for V100 (256 if using 8 GPUs)
+    TEST_BATCH_SIZE: 8 # 32 per GPU for V100 (256 if using 8 GPUs)
 
-  # Sampling
-  GRID_SAMPLER: False
-  IN_BATCH_SAMPLING: False # Use either in batch sampling or lable samples, not both.
-  WEIGHTED_SAMPLING: True #Sample rare sequences more often as dictaded by inverse frequency of labels
-  INV_FREQUENCY_POWER: 0.5 #Used for weighted sampling AND relevant losses with weighting
-  SEQUENCE_WEIGHT_AGG: "sum" #The aggregation to calculate sequence weight from applicable label weights.
-  SAMPLING_LOWER_CLAMP_BOUND: null # Lower bound for when clamping sampling weights
-  SAMPLING_UPPER_CLAMP_BOUND: null # Upper bound for when clamping sampling weights
-  TRAIN_LABEL_SAMPLE_SIZE: null # 15K for both. IS ALSO USED WITH GRID SAMPLER
-  VALIDATION_LABEL_SAMPLE_SIZE: null # use all labels in validation
+    # Sampling
+    GRID_SAMPLER: False
+    IN_BATCH_SAMPLING: False # Use either in batch sampling or lable samples, not both.
+    WEIGHTED_SAMPLING: True #Sample rare sequences more often as dictaded by inverse frequency of labels
+    INV_FREQUENCY_POWER: 0.5 #Used for weighted sampling AND relevant losses with weighting
+    SEQUENCE_WEIGHT_AGG: "sum" #The aggregation to calculate sequence weight from applicable label weights.
+    SAMPLING_LOWER_CLAMP_BOUND: null # Lower bound for when clamping sampling weights
+    SAMPLING_UPPER_CLAMP_BOUND: null # Upper bound for when clamping sampling weights
+    TRAIN_LABEL_SAMPLE_SIZE: null # 15K for both. IS ALSO USED WITH GRID SAMPLER
+    VALIDATION_LABEL_SAMPLE_SIZE: null # use all labels in validation
 
-  # Inference
-  LABEL_BATCH_SIZE_LIMIT_NO_GRAD: 50 # 1K for V100
-  SEQUENCE_BATCH_SIZE_LIMIT_NO_GRAD: 32 # 64 for V100
+    # Inference
+    LABEL_BATCH_SIZE_LIMIT_NO_GRAD: 50 # 1K for V100
+    SEQUENCE_BATCH_SIZE_LIMIT_NO_GRAD: 32 # 64 for V100
 
-  # General
-  LEARNING_RATE: 0.0003
-  OPTIMIZER: Adam
-  WEIGHT_DECAY: 0.001 # Only used for ADAM W or SGD
-  PROTEIN_EMBEDDING_DIM: 1100
-  LABEL_EMBEDDING_DIM: 1024
-  LATENT_EMBEDDING_DIM: 1024
-  OUTPUT_MLP_HIDDEN_DIM_SCALE_FACTOR: 3 # Scale MLP hidden state with respect to LATENT_EMBEDDING_DIM
-  OUTPUT_MLP_NUM_LAYERS: 3
-  OUTPUT_NEURON_PROBABILITY_BIAS: null
-  OUTPUT_MLP_BATCHNORM: True
-  RESIDUAL_CONNECTION: False
-  SYNC_BN: False
-  OUTPUT_MLP_DROPOUT: 0.0
-  LABEL_EMBEDDING_DROPOUT: 0.0
-  SEQUENCE_EMBEDDING_DROPOUT: 0.0
-  PROJECTION_HEAD_NUM_LAYERS: 4
-  PROJECTION_HEAD_HIDDEN_DIM_SCALE_FACTOR: 3
-  FEATURE_FUSION: concatenation # Select from concatenation, concatenation_diff, concatenation_prod, similarity
-  LABEL_EMBEDDING_POOLING_METHOD: mean # Select from mean, last_token, all
-  EXTRACT_VOCABULARIES_FROM: FULL_DATA_PATH # Can be any predefined path (e.g., FULL_DATA_PATH) or null. Null means generate vocab from scratch with dataset. Must set to null for zero-shot
-  OPTIMIZATION_METRIC_NAME: f1_macro # Only micro metrics are supported if sampling labels in validation
-  DECISION_TH_METRIC_NAME: f1_macro
-  ESTIMATE_MAP: False
-  NUM_EPOCHS: 46
+    # General
+    LEARNING_RATE: 0.0003
+    OPTIMIZER: Adam
+    WEIGHT_DECAY: 0.001 # Only used for ADAM W or SGD
+    PROTEIN_EMBEDDING_DIM: 1100
+    LABEL_EMBEDDING_DIM: 1024
+    LATENT_EMBEDDING_DIM: 1024
+    OUTPUT_MLP_HIDDEN_DIM_SCALE_FACTOR: 3 # Scale MLP hidden state with respect to LATENT_EMBEDDING_DIM
+    OUTPUT_MLP_NUM_LAYERS: 3
+    OUTPUT_NEURON_PROBABILITY_BIAS: null
+    OUTPUT_MLP_BATCHNORM: True
+    RESIDUAL_CONNECTION: False
+    SYNC_BN: False
+    OUTPUT_MLP_DROPOUT: 0.0
+    LABEL_EMBEDDING_DROPOUT: 0.0
+    SEQUENCE_EMBEDDING_DROPOUT: 0.0
+    PROJECTION_HEAD_NUM_LAYERS: 4
+    PROJECTION_HEAD_HIDDEN_DIM_SCALE_FACTOR: 3
+    FEATURE_FUSION: concatenation # Select from concatenation, concatenation_diff, concatenation_prod, similarity
+    LABEL_EMBEDDING_POOLING_METHOD: mean # Select from mean, last_token, all
+    EXTRACT_VOCABULARIES_FROM: FULL_DATA_PATH # Can be any predefined path (e.g., FULL_DATA_PATH) or null. Null means generate vocab from scratch with dataset. Must set to null for zero-shot
+    OPTIMIZATION_METRIC_NAME: f1_macro # Only micro metrics are supported if sampling labels in validation
+    DECISION_TH_METRIC_NAME: f1_macro
+    ESTIMATE_MAP: False
+    NUM_EPOCHS: 46
 
-  # Memory optimizations
-  GRADIENT_ACCUMULATION_STEPS: 1 # 1 = no gradient accumulation
-  GRADIENT_CHECKPOINTING: False # True = gradient checkpointing
-  LORA: True # True = use LORA
-  LORA_RANK: 4
-  LORA_ALPHA: 8 # Typically = 2 * Rank
-  CLIP_VALUE: 1 # Gradient clipping, set to "null" to turn off
+    # Memory optimizations
+    GRADIENT_ACCUMULATION_STEPS: 1 # 1 = no gradient accumulation
+    GRADIENT_CHECKPOINTING: False # True = gradient checkpointing
+    LORA: True # True = use LORA
+    LORA_RANK: 4
+    LORA_ALPHA: 8 # Typically = 2 * Rank
+    CLIP_VALUE: 1 # Gradient clipping, set to "null" to turn off
 
-  # Losses. Only the parameters for selected loss will be used
-  LOSS_FN: FocalLoss # Currently supported: BCE, FocalLoss, BatchWeightedBCE, RGDBCE, WeightedBCE
-  FOCAL_LOSS_GAMMA: 2
-  FOCAL_LOSS_ALPHA: -1
-  BCE_POS_WEIGHT: 1 # 671.7130737304688
-  SUPCON_TEMP: 0.07
-  RGDBCE_TEMP: 0.12 # search from [1,1/3,1/5,1/7,1/9] according to paper
-  LABEL_SMOOTHING: 0.0 # Currently only implemented for FocalLoss
+    # Losses. Only the parameters for selected loss will be used
+    LOSS_FN: FocalLoss # Currently supported: BCE, FocalLoss, BatchWeightedBCE, RGDBCE, WeightedBCE
+    FOCAL_LOSS_GAMMA: 2
+    FOCAL_LOSS_ALPHA: -1
+    BCE_POS_WEIGHT: 1 # 671.7130737304688
+    SUPCON_TEMP: 0.07
+    RGDBCE_TEMP: 0.12 # search from [1,1/3,1/5,1/7,1/9] according to paper
+    LABEL_SMOOTHING: 0.0 # Currently only implemented for FocalLoss
 
-  # Sequence and label encoders
-  PRETRAINED_SEQUENCE_ENCODER: True
-  TRAIN_SEQUENCE_ENCODER: False
-  LABEL_ENCODER_NUM_TRAINABLE_LAYERS: 0
-  DISTRIBUTE_LABELS: False
-  TRAIN_PROJECTION_HEAD: True
-  LABEL_ENCODER_CHECKPOINT: intfloat/multilingual-e5-large-instruct #microsoft/biogpt, intfloat/e5-large-v2, intfloat/multilingual-e5-large-instruct
+    # Sequence and label encoders
+    PRETRAINED_SEQUENCE_ENCODER: True
+    TRAIN_SEQUENCE_ENCODER: False
+    LABEL_ENCODER_NUM_TRAINABLE_LAYERS: 0
+    DISTRIBUTE_LABELS: False
+    TRAIN_PROJECTION_HEAD: True
+    LABEL_ENCODER_CHECKPOINT: intfloat/multilingual-e5-large-instruct #microsoft/biogpt, intfloat/e5-large-v2, intfloat/multilingual-e5-large-instruct
 
-  # Data processing and metrics
-  DEDUPLICATE: True
-  MAX_SEQUENCE_LENGTH: 10000 # Only affects training set. Just 8 seqs with 10K+ length
-  REMOVE_UNREPRESENTED_LABELS: False # Removes labels that never apply to train sequences
-  NORMALIZE_PROBABILITIES: False
-  INFERENCE_GO_DESCRIPTIONS: name+label # Ensembling during inference (validation, test). Only label, name, or name+label are supported.
+    # Data processing and metrics
+    DEDUPLICATE: True
+    MAX_SEQUENCE_LENGTH: 10000 # Only affects training set. Just 8 seqs with 10K+ length
+    REMOVE_UNREPRESENTED_LABELS: False # Removes labels that never apply to train sequences
+    NORMALIZE_PROBABILITIES: False
+    INFERENCE_GO_DESCRIPTIONS: name+label # Ensembling during inference (validation, test). Only label, name, or name+label are supported.
 
-  # Augmentation
-  AUGMENT_RESIDUE_PROBABILITY: 0.1 # 0.0 = no augmentation. The probability that any given residue will be augmented. AlphaFold uses 0.15 (15% of residues are augmented)
-  USE_RESIDUE_MASKING: False # If True, also use masking to augment sequences. Must then also set AUGMENT_SEQUENCE_PROBABILITY > 0, and TRAIN_SEQUENCE_ENCODER = True
-  LABEL_AUGMENTATION_DESCRIPTIONS: name+label # Specifies what descriptions to use during training. # Options are any combination of label, name, and synonym_exact. Must include at least one.
-  LABEL_EMBEDDING_NOISING_ALPHA: 20.0 # 0.0 = no noising. Typical ranges are <20. Noising scalar from https://arxiv.org/pdf/2310.05914.pdf
+    # Augmentation
+    AUGMENT_RESIDUE_PROBABILITY: 0.1 # 0.0 = no augmentation. The probability that any given residue will be augmented. AlphaFold uses 0.15 (15% of residues are augmented)
+    USE_RESIDUE_MASKING: False # If True, also use masking to augment sequences. Must then also set AUGMENT_SEQUENCE_PROBABILITY > 0, and TRAIN_SEQUENCE_ENCODER = True
+    LABEL_AUGMENTATION_DESCRIPTIONS: name+label # Specifies what descriptions to use during training. # Options are any combination of label, name, and synonym_exact. Must include at least one.
+    LABEL_EMBEDDING_NOISING_ALPHA: 20.0 # 0.0 = no noising. Typical ranges are <20. Noising scalar from https://arxiv.org/pdf/2310.05914.pdf
 
-  # Constants
-  SEED: 42
-  EPOCHS_PER_VALIDATION: 1 # Must be >= 1
-  NUM_WORKERS: 3
-  DECISION_TH: 0.5 # Set to null if you want to use the best threshold from validation
+    # Constants
+    SEED: 42
+    EPOCHS_PER_VALIDATION: 1 # Must be >= 1
+    NUM_WORKERS: 3
+    DECISION_TH: 0.5 # Set to null if you want to use the best threshold from validation
 
-  # Subset fractions (for rapid prototyping; set to 1 for final model)[s]
-  TRAIN_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
-  VALIDATION_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
-  TEST_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
-  SHUFFLE_LABELS: False # Only has an effect if sample sizes are set and not using grid sampler. If False, simply select same labels in order
+    # Subset fractions (for rapid prototyping; set to 1 for final model)[s]
+    TRAIN_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
+    VALIDATION_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
+    TEST_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
+    SHUFFLE_LABELS: False # Only has an effect if sample sizes are set and not using grid sampler. If False, simply select same labels in order
 
 # Constants for protein encoder model (e.g. ProteInfer). Not really params since
 # we are not going to change these.
 embed_sequences_params:
-  INPUT_CHANNELS: 20
-  OUTPUT_CHANNELS: 1100
-  KERNEL_SIZE: 9
-  DILATION_BASE: 3
-  NUM_RESNET_BLOCKS: 5
-  BOTTLENECK_FACTOR: 0.5
-  PROTEINFER_NUM_GO_LABELS: 32102
-  PROTEINFER_NUM_EC_LABELS: 5134
+    INPUT_CHANNELS: 20
+    OUTPUT_CHANNELS: 1100
+    KERNEL_SIZE: 9
+    DILATION_BASE: 3
+    NUM_RESNET_BLOCKS: 5
+    BOTTLENECK_FACTOR: 0.5
+    PROTEINFER_NUM_GO_LABELS: 32102
+    PROTEINFER_NUM_EC_LABELS: 5134
 
 # Paths to data, vocabularies, embeddings, and models
 paths:
-  # Paths referenced relative to DATA_PATH (will have "data" prepended)
-  data_paths:
-    # Toxin data paths
+    # Paths referenced relative to DATA_PATH (will have "data" prepended)
+    data_paths:
+        # Toxin data paths
 
-    TRAIN_TOXIN_DATA_PATH: swissprot/toxin_splits/random/train.fasta
-    VAL_TOXIN_DATA_PATH: swissprot/toxin_splits/random/val.fasta
-    TEST_TOXIN_DATA_PATH: swissprot/toxin_splits/random/test.fasta
+        TRAIN_TOXIN_DATA_PATH: swissprot/toxin_splits/random/train.fasta
+        VAL_TOXIN_DATA_PATH: swissprot/toxin_splits/random/val.fasta
+        TEST_TOXIN_DATA_PATH: swissprot/toxin_splits/random/test.fasta
 
-    # ProteInfer data paths
-    TRAIN_DATA_PATH: swissprot/proteinfer_splits/random/train_GO.fasta
-    TRAIN_2024_DATA_PATH: swissprot/proteinfer_splits/random/train_GO_jul_2024.fasta
-    VAL_DATA_PATH: swissprot/proteinfer_splits/random/dev_GO.fasta
-    TEST_DATA_PATH: swissprot/proteinfer_splits/random/test_GO.fasta
-    TEST_TOP_LABELS_DATA_PATH: swissprot/proteinfer_splits/random/test_top_labels_GO.fasta
+        # ProteInfer data paths
+        TRAIN_DATA_PATH: swissprot/proteinfer_splits/random/train_GO.fasta
+        TRAIN_2024_DATA_PATH: swissprot/proteinfer_splits/random/train_GO_jul_2024.fasta
+        VAL_DATA_PATH: swissprot/proteinfer_splits/random/dev_GO.fasta
+        TEST_DATA_PATH: swissprot/proteinfer_splits/random/test_GO.fasta
+        TEST_TOP_LABELS_DATA_PATH: swissprot/proteinfer_splits/random/test_top_labels_GO.fasta
 
-    TRAIN_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/train_GO.fasta
-    VAL_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/dev_GO.fasta
-    TEST_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/test_GO.fasta
+        TRAIN_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/train_GO.fasta
+        VAL_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/dev_GO.fasta
+        TEST_CLUSTERED_DATA_PATH: swissprot/proteinfer_splits/clustered/test_GO.fasta
 
-    FULL_DATA_PATH: swissprot/proteinfer_splits/random/full_GO.fasta # used to generate vocabularies
-    FULL_EC_DATA_PATH: swissprot/proteinfer_splits/random/full_EC.fasta # used to generate vocabularies
+        FULL_DATA_PATH: swissprot/proteinfer_splits/random/full_GO.fasta # used to generate vocabularies
+        FULL_EC_DATA_PATH: swissprot/proteinfer_splits/random/full_EC.fasta # used to generate vocabularies
 
-    TEST_2024_DATA_PATH: swissprot/proteinfer_splits/random/test_GO_jul_2024.fasta
-    TEST_2024_PINF_VOCAB_DATA_PATH: swissprot/proteinfer_splits/random/test_GO_jul_2024_pinf_vocab.fasta
+        TEST_2024_DATA_PATH: swissprot/proteinfer_splits/random/test_GO_jul_2024.fasta
+        TEST_2024_PINF_VOCAB_DATA_PATH: swissprot/proteinfer_splits/random/test_GO_jul_2024_pinf_vocab.fasta
 
-    # Zero-shot data paths
-    TRAIN_DATA_PATH_ZERO_SHOT: swissprot/proteinfer_splits/random/fake_train_GO_zero_shot.fasta
-    VAL_DATA_PATH_ZERO_SHOT: swissprot/proteinfer_splits/random/fake_dev_GO_zero_shot.fasta
-    TEST_DATA_PATH_ZERO_SHOT: zero_shot/GO_swissprot_jul_2024.fasta
-    TEST_DATA_PATH_ZERO_SHOT_LEAF_NODES: zero_shot/GO_swissprot_leaf_nodes_jul_2024.fasta
+        # Zero-shot data paths
+        TRAIN_DATA_PATH_ZERO_SHOT: swissprot/proteinfer_splits/random/fake_train_GO_zero_shot.fasta
+        VAL_DATA_PATH_ZERO_SHOT: swissprot/proteinfer_splits/random/fake_dev_GO_zero_shot.fasta
+        TEST_DATA_PATH_ZERO_SHOT: zero_shot/GO_swissprot_jul_2024.fasta
+        TEST_DATA_PATH_ZERO_SHOT_LEAF_NODES: zero_shot/GO_swissprot_leaf_nodes_jul_2024.fasta
 
-    # Other non-GO datasets to test zero shot
-    VAL_EC_DATA_PATH_ZERO_SHOT: zero_shot/dev_EC.fasta
-    TEST_EC_DATA_PATH_ZERO_SHOT: zero_shot/test_EC.fasta
+        # Other non-GO datasets to test zero shot
+        VAL_EC_DATA_PATH_ZERO_SHOT: zero_shot/dev_EC.fasta
+        TEST_EC_DATA_PATH_ZERO_SHOT: zero_shot/test_EC.fasta
 
-    # Vocabulary paths
-    VOCABULARIES_DIR: vocabularies/proteinfer
-    GO_ANNOTATIONS_2024_07_PATH: annotations/go_annotations_jul_2024.pkl
-    GO_ANNOTATIONS_2019_UPDATED_PATH: annotations/go_annotations_2019_07_01_updated.pkl
-    GO_ANNOTATIONS_2025_10_PATH: annotations/go_annotations_2025_10_10.pkl
-    EC_ANNOTATIONS_PATH: annotations/ec_annotations.pkl
+        # Vocabulary paths
+        VOCABULARIES_DIR: vocabularies/proteinfer
+        GO_ANNOTATIONS_2024_07_PATH: annotations/go_annotations_jul_2024.pkl
+        GO_ANNOTATIONS_2019_UPDATED_PATH: annotations/go_annotations_2019_07_01_updated.pkl
+        GO_ANNOTATIONS_2025_10_PATH: annotations/go_annotations_2025_10_10.pkl
+        EC_ANNOTATIONS_PATH: annotations/ec_annotations.pkl
 
-    # Embeddings paths (if using frozen pre-trained models)
-    GO_BASE_LABEL_EMBEDDING_PATH: embeddings/frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
-    GO_2024_BASE_LABEL_EMBEDDING_PATH: embeddings/2024_frozen_label_embeddings.pt
-    EC_BASE_LABEL_EMBEDDING_PATH: embeddings/ecv1_frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
-    GO_2025_10_BASE_LABEL_EMBEDDING_PATH: embeddings/202510_frozen_label_embeddings.pt
+        # Embeddings paths (if using frozen pre-trained models)
+        GO_BASE_LABEL_EMBEDDING_PATH: embeddings/frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
+        GO_2024_BASE_LABEL_EMBEDDING_PATH: embeddings/2024_frozen_label_embeddings.pt
+        EC_BASE_LABEL_EMBEDDING_PATH: embeddings/ecv1_frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
+        GO_2025_10_BASE_LABEL_EMBEDDING_PATH: embeddings/202510_frozen_label_embeddings.pt
 
-    # ProteInfer paths
-    PARENTHOOD_LIB_PATH: vocabularies/parenthood_2025_10.json
-    PROTEINFER_GO_WEIGHTS_PATH: models/proteinfer/GO_model_weights13703706.pkl
-    PROTEINFER_EC_WEIGHTS_PATH: models/proteinfer/EC_model_weights13703966.pkl
+        # ProteInfer paths
+        PARENTHOOD_LIB_PATH: vocabularies/parenthood_2025_10.json
+        PROTEINFER_GO_WEIGHTS_PATH: models/proteinfer/GO_model_weights13703706.pkl
+        PROTEINFER_EC_WEIGHTS_PATH: models/proteinfer/EC_model_weights13703966.pkl
 
-    # SwissProt
-    2024_07_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_jul_2024.dat
-    2025_10_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_oct_2025.dat
+        # SwissProt
+        2024_07_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_jul_2024.dat
+        2025_10_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_oct_2025.dat
 
-  # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
-  output_paths:
-    # Where to save the model
-    OUTPUT_MODEL_DIR: checkpoints/
+    # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
+    output_paths:
+        # Where to save the model
+        OUTPUT_MODEL_DIR: checkpoints/
 
-    # Where to save results
-    RESULTS_DIR: results/
+        # Where to save results
+        RESULTS_DIR: results/
 
-    # Where to log
-    LOG_DIR: logs/
+        # Where to log
+        LOG_DIR: logs/
+
+    remote_data:
+        # Data & models published by original authors
+        ZENODO_ORIGINAL_DATA: https://zenodo.org/records/13897920/files/data.zip?download=1
+
+        # Modified data on HuggingFace
+        HUGGINGFACE_DATA_REPO: kagurazakahinagi/protnote_data

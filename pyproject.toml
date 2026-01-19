@@ -64,3 +64,6 @@ joblib = "1.2.0.*"
 
 [tool.pixi.pypi-dependencies]
 protnote = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+dataprep = "python bin/data_helper.py download"

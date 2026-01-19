@@ -77,6 +77,13 @@ The following notes will make it easier to navigate these instructions:
 
 
 ## Data
+Inside the project's directory, run
+```sh
+pixi run dataprep
+```
+to download the data and model files. The files can be found at https://huggingface.co/kagurazakahinagi/protnote_data.
+
+### Published Data from original ProtNote
 We train and test ProtNote with protein sequences from the SwissProt section of UniProt, corresponding to sequences with human-verified funcitons. Further, we evaluate ProtNote on different zero shot scenarios, including prediction of unseen/novel GO terms and of EC Numbers -- a type of annotation which the model was not trained on.
 
 All the data to train and run inference with ProtNote can is available in the data.zip file (17.6 GB) that can be downloaded from Zenodo using the following command *from the protnote root folder*:
@@ -132,7 +139,7 @@ python bin/download_GO_annotations.py \
 Where `{GO_ANNOTATIONS_RELEASE_URL}` is a specific GO release (e.g., https://release.geneontology.org/2024-06-17/ontology/go.obo) and `{OUTPUT_FILE_NAME}` is the name of the annotations file that will be stored in data/annotations/ (e.g., `go_annotations_jul_2024.pkl`).
 
 To download the *latest* EC annotations, run:
-```
+```sh
 python bin/download_EC_annotations.py
 ```
 
@@ -345,7 +352,12 @@ git clone https://github.com/google-research/proteinfer.git ../proteinfer
 conda activate proteinfer
 python bin/download_and_test_proteinfer_seeds.py --get-predictions
 conda activate protnote
-python bin/test_proteinfer.py --test-paths-names TEST_2024_PINF_VOCAB_DATA_PATH --only-inference --only-represented-labels --save-prediction-results --name TEST_2024_PINF_VOCAB_DATA_PATH_proteinfer --model-weights-id 13703706
+python bin/test_proteinfer.py   --test-paths-names TEST_2024_PINF_VOCAB_DATA_PATH \
+                                --only-inference \
+                                --only-represented-labels \
+                                --save-prediction-results \
+                                --name TEST_2024_PINF_VOCAB_DATA_PATH_proteinfer \
+                                --model-weights-id 13703706
 ```
 
 #### ProtNote predictions on all test sets
