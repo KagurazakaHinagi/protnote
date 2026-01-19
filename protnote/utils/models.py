@@ -1,28 +1,19 @@
-import torch
 import logging
 import re
-import numpy as np
-from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import autocast
 from collections import OrderedDict
+
 import loralib as lora
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, TensorDataset
 
 
-def apply_lora_biogpt_attention(
-    layer, rank, alpha, device, in_features=1024, out_features=1024
-):
-    layer.self_attn.q_proj = lora.Linear(
-        in_features, out_features, r=rank, lora_alpha=alpha
-    )
-    layer.self_attn.v_proj = lora.Linear(
-        in_features, out_features, r=rank, lora_alpha=alpha
-    )
-    layer.self_attn.k_proj = lora.Linear(
-        in_features, out_features, r=rank, lora_alpha=alpha
-    )
-    layer.self_attn.out_proj = lora.Linear(
-        in_features, out_features, r=rank, lora_alpha=alpha
-    )
+
+def apply_lora_biogpt_attention(layer, rank, alpha, device, in_features=1024, out_features=1024):
+    layer.self_attn.q_proj = lora.Linear(in_features, out_features, r=rank, lora_alpha=alpha)
+    layer.self_attn.v_proj = lora.Linear(in_features, out_features, r=rank, lora_alpha=alpha)
+    layer.self_attn.k_proj = lora.Linear(in_features, out_features, r=rank, lora_alpha=alpha)
+    layer.self_attn.out_proj = lora.Linear(in_features, out_features, r=rank, lora_alpha=alpha)
     layer.fc1 = lora.Linear(in_features, out_features * 4, r=rank, lora_alpha=alpha)
     layer.fc2 = lora.Linear(in_features * 4, out_features, r=rank, lora_alpha=alpha)
 
@@ -42,9 +33,7 @@ def biogpt_train_last_n_layers(model, n, lora_params=None):
                 if number > max_layer_num - n:
                     param.requires_grad = True
                     if lora_params is not None:
-                        apply_lora_biogpt_attention(
-                            **{**lora_params, "layer": model.layers[number]}
-                        )
+                        apply_lora_biogpt_attention(**{**lora_params, "layer": model.layers[number]})
 
         if lora_params is not None:
             lora.mark_only_lora_as_trainable(model)
@@ -88,18 +77,12 @@ def count_parameters_by_layer(model):
     # Formatting and logging
     line = "=" * 120
     logging.info(line)
-    logging.info(
-        f"{'Major Category':<{max_name_length}} {'Total Parameters':<20} {'Trainable Parameters'}"
-    )
+    logging.info(f"{'Major Category':<{max_name_length}} {'Total Parameters':<20} {'Trainable Parameters'}")
     logging.info(line)
     for category, params in category_params.items():
-        logging.info(
-            f"{category:<{max_name_length}} {params['total']:<20} {params['trainable']}"
-        )
+        logging.info(f"{category:<{max_name_length}} {params['total']:<20} {params['trainable']}")
 
-    assert (
-        trainable_params > 0
-    ), "No trainable parameters found. Check the config file to ensure that the model is not frozen."
+    assert trainable_params > 0, "No trainable parameters found. Check the config file to ensure that the model is not frozen."
     logging.info(line)
     logging.info(f"{'TOTAL':<{max_name_length}} {total_params:<20} {trainable_params}")
     logging.info(line)
@@ -158,19 +141,13 @@ def pool_embeddings(last_hidden_states, attention_mask, method, account_for_sos)
             adjusted_attention_mask[:, 0] = 0
 
         # Mask the last_hidden_state tensor and compute the sum
-        sum_hidden_states = (
-            last_hidden_states * adjusted_attention_mask.unsqueeze(-1)
-        ).sum(dim=1)
+        sum_hidden_states = (last_hidden_states * adjusted_attention_mask.unsqueeze(-1)).sum(dim=1)
 
         # Compute the mean of the last hidden state
         sequence_embedding = sum_hidden_states / (sequence_length)
 
     elif method == "last_token":
-        last_token_indices = (
-            (sequence_length_raw - 1)
-            .unsqueeze(-1)
-            .expand(-1, -1, last_hidden_states.size(-1))
-        )
+        last_token_indices = (sequence_length_raw - 1).unsqueeze(-1).expand(-1, -1, last_hidden_states.size(-1))
 
         sequence_embedding = last_hidden_states.gather(1, last_token_indices).squeeze()
     elif method == "all":
@@ -196,7 +173,7 @@ def get_label_embeddings(
     model.eval()
 
     if total_labels <= batch_size_limit:
-        with autocast(), torch.no_grad():
+        with torch.autocast("cuda"), torch.no_grad():
             sequence_embeddings = model(
                 input_ids=tokenized_labels["input_ids"],
                 attention_mask=tokenized_labels["attention_mask"],
@@ -226,10 +203,8 @@ def get_label_embeddings(
         all_label_embeddings = []
         for idx, batch in enumerate(dataloader):
             input_ids, attention_mask = batch
-            with autocast(), torch.no_grad():
-                sequence_embeddings = model(
-                    input_ids=input_ids, attention_mask=attention_mask
-                ).last_hidden_state
+            with torch.autocast("cuda"), torch.no_grad():
+                sequence_embeddings = model(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
             sequence_embeddings = pool_embeddings(
                 sequence_embeddings,
                 attention_mask,
@@ -237,16 +212,12 @@ def get_label_embeddings(
                 account_for_sos=account_for_sos,
             )
 
-            all_label_embeddings.append(
-                sequence_embeddings.cpu() if append_in_cpu else sequence_embeddings
-            )
+            all_label_embeddings.append(sequence_embeddings.cpu() if append_in_cpu else sequence_embeddings)
             del sequence_embeddings
 
             if len(dataloader) >= 10:
                 if (idx + 1) % (len(dataloader) // 10) == 0:
-                    logging.info(
-                        f"label embedding generation progress = {round((idx+1)*100/len(dataloader),2)}%"
-                    )
+                    logging.info(f"label embedding generation progress = {round((idx + 1) * 100 / len(dataloader), 2)}%")
 
         # Concatenate all the label embeddings
         model.train()
@@ -267,12 +238,8 @@ def generate_label_embeddings_from_text(
     tokenized_labels = tokenize_labels(label_annotations, label_tokenizer)
 
     # Move to GPU
-    tokenized_labels["input_ids"] = tokenized_labels["input_ids"].to(
-        label_encoder.device
-    )
-    tokenized_labels["attention_mask"] = tokenized_labels["attention_mask"].to(
-        label_encoder.device
-    )
+    tokenized_labels["input_ids"] = tokenized_labels["input_ids"].to(label_encoder.device)
+    tokenized_labels["attention_mask"] = tokenized_labels["attention_mask"].to(label_encoder.device)
 
     # Generate label embeddings
     return get_label_embeddings(
