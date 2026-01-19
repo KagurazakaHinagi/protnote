@@ -52,13 +52,17 @@ capability for navigating the dynamic landscape of protein biology.
 <!-- tocstop -->
 
 ## Installation
+> **Note:** The [original conda environment](misc/environment.yml) and `setup.py` has dependency conflicts. This fork has fixed them and unified them with Pixi for smoother setup. Please use the installation instructions below. 
+
+### Pixi Installation
+See official [Pixi installation](https://pixi.prefix.dev/latest/installation/)
+
+### Protnote Environment Activation
+Simply `cd` into the git repo and run:
+```sh
+pixi shell
 ```
-git clone https://github.com/microsoft/protnote.git
-cd protnote
-conda env create -f environment.yml
-conda activate protnote
-pip install -e ./  # make sure ./ is the dir including setup.py
-```
+to activate the environment. When finished, use `exit` to deactivate it.
 
 ## Config
 Most hyperparameters and paths are managed through the `base_config.yaml`. Whenever reasonable, we enforce certain files to be in specific directories to increase consistency and reproducibility. In general, we adhere to the following data argument naming conventions in scripts: 
@@ -77,7 +81,7 @@ We train and test ProtNote with protein sequences from the SwissProt section of 
 
 All the data to train and run inference with ProtNote can is available in the data.zip file (17.6 GB) that can be downloaded from Zenodo using the following command *from the protnote root folder*:
 
-```
+```sh
 sudo apt-get install unzip
 curl -O https://zenodo.org/records/13897920/files/data.zip?download=1
 unzip data.zip
@@ -119,8 +123,10 @@ This is a pickle file storing a pandas dataframe with the annotations and their 
 
 To seamlessly create the annotations file for GO annotations or EC numbers, we provide the `download_GO_annotations.py` and `download_EC_annotations.py` scripts. To get the GO annotations run:
 
-```
-python bin/download_GO_annotations.py --url {GO_ANNOTATIONS_RELEASE_URL} --output-file {OUTPUT_FILE_NAME}
+```sh
+python bin/download_GO_annotations.py \
+    --url {GO_ANNOTATIONS_RELEASE_URL} \
+    --output-file {OUTPUT_FILE_NAME}
 ```
 
 Where `{GO_ANNOTATIONS_RELEASE_URL}` is a specific GO release (e.g., https://release.geneontology.org/2024-06-17/ontology/go.obo) and `{OUTPUT_FILE_NAME}` is the name of the annotations file that will be stored in data/annotations/ (e.g., `go_annotations_jul_2024.pkl`).
@@ -136,8 +142,11 @@ For each sequence, ProtNote computes the likelihood that it is annotated with an
 
 To generate the embeddings that we used to train ProtNote, execute the following code:
 
-```
-python bin/generate_label_embeddings.py --base-label-embedding-path {EMBEDDING_PATH_CONFIG_KEY} --annotations-path-name {ANNOTATIONS_PATH_CONFIG_KEY} --add-instruction --account-for-sos
+```sh
+python bin/generate_label_embeddings.py \
+    --base-label-embedding-path {EMBEDDING_PATH_CONFIG_KEY} \
+    --annotations-path-name {ANNOTATIONS_PATH_CONFIG_KEY} \
+    --add-instruction --account-for-sos
 ```
 
 * `{EMBEDDING_PATH_CONFIG_KEY}`: should be a key from the config that specifies the "base" path name where the embeddings will be stored. It's called "base" because `{EMBEDDING_PATH_CONFIG_KEY}` will be modified based on some of the arguments passed to the script, such as the pooling method.
@@ -169,8 +178,16 @@ The test set is specified via the `--test-paths-names` argument, and the argumen
 ### Inference
 To run inference, simply run:
 
-```
-python bin/main.py --test-paths-names {YOUR_TEST_SET_CONFIG_KEY} --model-file {MODEL_WEIGHTS_FILE}  --name {MODEL_RUN_NAME} --base-label-embedding-name {EMBEDDING_PATH_CONFIG_KEY} --annotations-path-name {ANNOTATIONS_PATH_CONFIG_KEY} --save-prediction-results --save-val-test-metrics --save-val-test-metrics-file {OUT_METRICS_FILE}
+```sh
+python bin/main.py \
+    --test-paths-names {YOUR_TEST_SET_CONFIG_KEY} \
+    --model-file {MODEL_WEIGHTS_FILE} \
+    --name {MODEL_RUN_NAME} \
+    --base-label-embedding-name {EMBEDDING_PATH_CONFIG_KEY} \
+    --annotations-path-name {ANNOTATIONS_PATH_CONFIG_KEY} \
+    --save-prediction-results \
+    --save-val-test-metrics \
+    --save-val-test-metrics-file {OUT_METRICS_FILE}
 ```
 
 * `{YOUR_TEST_SET_CONFIG_KEY}`: the name of the test set path in the `base_config.yaml` (e.g., `TEST_DATA_PATH`).
@@ -203,13 +220,13 @@ The following two sections explain how to get the data to run the notebook succe
 
 Download the data, ablation_models, and outputs folders. *Make sure you are in the root repo directory. The data, ablation_models, and outputs folders are 17.6, 41.4, and 18.7 GB in size, respectively*.
 
-```
+```sh
 sudo apt-get install unzip # Install unzip if necessary
-#Download files from zenodo
+# Download files from zenodo
 curl -O https://zenodo.org/records/13897920/files/data.zip?download=1
 curl -O https://zenodo.org/records/13897920/files/ablation_models.zip?download=1
 curl -O https://zenodo.org/records/13897920/files/outputs.zip?download=1
-#Unzip files in the correct directories
+# Unzip files in the correct directories
 unzip data.zip
 unzip outputs.zip
 unzip -j ablation_models.zip -d data/models/ProtNote/ 
@@ -227,19 +244,19 @@ Perform the following stepts to download the original ProteInfer dataset TFRecor
 
 Install gcloud:
 
-```
+```sh
 sudo snap install google-cloud-cli --classic
 ```
 
 Then, login with a google account (e.g., gmail). The following command will prompt a browser window for authentication:
 
-```
+```sh
 gcloud init
 ```
 
 Download the data:
 
-```
+```sh
 gsutil -m cp -r gs://brain-genomics-public/research/proteins/proteinfer/datasets/swissprot .
 ```
 
@@ -247,7 +264,7 @@ Move the `random` and `clustered` folders to the directory data/swissprot/protei
 
 To create the fasta versions of these files run the following commands from root:
 
-```
+```sh
 python bin/make_proteinfer_dataset.py --dataset-type random --annotation-types GO
 python bin/make_proteinfer_dataset.py --dataset-type random --annotation-types EC
 cp data/swissprot/proteinfer_splits/random/test_EC.fasta data/zero_shot/
@@ -256,10 +273,17 @@ cp data/swissprot/proteinfer_splits/random/test_EC.fasta data/zero_shot/
 #### Download annotations
 Download GO annotations and EC numbers.
 
-```
-python bin/download_GO_annotations.py --url https://release.geneontology.org/2019-07-01/ontology/go.obo --output-file go_annotations_2019_07_01.pkl
-python bin/download_GO_annotations.py --url https://release.geneontology.org/2024-06-17/ontology/go.obo --output-file go_annotations_jul_2024.pkl
-python bin/update_go_annotations.py --old-annotations-file-path data/annotations/go_annotations_2019_07_01.pkl --new-annotations-file-path data/annotations/go_annotations_jul_2024.pkl --output-file-path data/annotations/go_annotations_2019_07_01_updated.pkl
+```sh
+python bin/download_GO_annotations.py \
+    --url https://release.geneontology.org/2019-07-01/ontology/go.obo \
+    --output-file go_annotations_2019_07_01.pkl
+python bin/download_GO_annotations.py \
+    --url https://release.geneontology.org/2024-06-17/ontology/go.obo \
+    --output-file go_annotations_jul_2024.pkl
+python bin/update_go_annotations.py \
+    --old-annotations-file-path data/annotations/go_annotations_2019_07_01.pkl \
+    --new-annotations-file-path data/annotations/go_annotations_jul_2024.pkl \
+    --output-file-path data/annotations/go_annotations_2019_07_01_updated.pkl
 python bin/download_EC_annotations.py
 ```
 
@@ -273,15 +297,34 @@ Run ```python bin/create_test_sets.py``` to create all the remaining datasets us
 
 We cached the text embeddings of annotation text descriptions under five scenarios: GO_2019 annotations with BioGPT, GO_2019 annotations with E5, EC numbers with BioGPT, EC numbers with E5, and GO_2024 annotations with E5. The following code generates the embeddings for these scenarios:
 
-```
-python bin/generate_label_embeddings.py --add-instruction --account-for-sos
-python bin/generate_label_embeddings.py --label-encoder-checkpoint microsoft/biogpt --account-for-sos
+```sh
+python bin/generate_label_embeddings.py \
+    --add-instruction --account-for-sos
+python bin/generate_label_embeddings.py \
+    --label-encoder-checkpoint microsoft/biogpt \
+    --account-for-sos
 
-python bin/generate_label_embeddings.py --base-label-embedding-path EC_BASE_LABEL_EMBEDDING_PATH --annotations-path-name EC_ANNOTATIONS_PATH --label-encoder-checkpoint microsoft/biogpt --account-for-sos
-python bin/generate_label_embeddings.py --base-label-embedding-path EC_BASE_LABEL_EMBEDDING_PATH --annotations-path-name EC_ANNOTATIONS_PATH --add-instruction --account-for-sos
+python bin/generate_label_embeddings.py \
+    --base-label-embedding-path EC_BASE_LABEL_EMBEDDING_PATH \
+    --annotations-path-name EC_ANNOTATIONS_PATH \
+    --label-encoder-checkpoint microsoft/biogpt \
+    --account-for-sos
+python bin/generate_label_embeddings.py \
+    --base-label-embedding-path EC_BASE_LABEL_EMBEDDING_PATH \
+    --annotations-path-name EC_ANNOTATIONS_PATH \
+    --add-instruction \
+    --account-for-sos
 
-python bin/generate_label_embeddings.py --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH --annotations-path-name GO_ANNOTATIONS_PATH --add-instruction --account-for-sos
-python bin/generate_label_embeddings.py --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH --annotations-path-name GO_ANNOTATIONS_PATH --label-encoder-checkpoint microsoft/biogpt --account-for-sos
+python bin/generate_label_embeddings.py \
+    --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH \
+    --annotations-path-name GO_ANNOTATIONS_PATH \
+    --add-instruction \
+    --account-for-sos
+python bin/generate_label_embeddings.py \
+    --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH \
+    --annotations-path-name GO_ANNOTATIONS_PATH \
+    --label-encoder-checkpoint microsoft/biogpt \
+    --account-for-sos
 
 ```
 
@@ -296,7 +339,7 @@ Below are examples of two ProteInfer models. One is for GO annotation prediction
 To download and get the predictions for the five ProteInfer seeds used in the paper, we need to clone ProteInfer's repo from `https://github.com/google-research/proteinfer.git` and create a ProteInfer conda environment. Make sure you are inside the `protnote` repo before running the following commands:
 
 
-```
+```sh
 conda env create -f proteinfer_conda_requirements.yml
 git clone https://github.com/google-research/proteinfer.git ../proteinfer
 conda activate proteinfer
@@ -309,14 +352,15 @@ python bin/test_proteinfer.py --test-paths-names TEST_2024_PINF_VOCAB_DATA_PATH 
 
 To generate all the predictions shown in the Results notebook, you will need ProtNote's weights for the five different seeds we used, available in Zenodo (https://zenodo.org/records/13897920/files/data.zip in the directory data/models/ProtNote/). Dump the downloaded models in the following directory: protnote/data/models/ProtNote; or directly train the models. Then, run the following commands:
 
-```
+```sh
 python bin/test_models.py --model-files \
     seed_replicates_v9_12_sum_last_epoch.pt \
     seed_replicates_v9_22_sum_last_epoch.pt \
     seed_replicates_v9_32_sum_last_epoch.pt \
     seed_replicates_v9_42_sum_last_epoch.pt \
     seed_replicates_v9_52_sum_last_epoch.pt \
-    --test-paths-names "TEST_DATA_PATH_ZERO_SHOT_LEAF_NODES" "TEST_DATA_PATH_ZERO_SHOT" "TEST_EC_DATA_PATH_ZERO_SHOT" "TEST_DATA_PATH" --save-prediction-results
+    --test-paths-names "TEST_DATA_PATH_ZERO_SHOT_LEAF_NODES" "TEST_DATA_PATH_ZERO_SHOT" "TEST_EC_DATA_PATH_ZERO_SHOT" "TEST_DATA_PATH" \
+    --save-prediction-results
 
 python bin/test_models.py --model-files \
     seed_replicates_v9_42_sum_last_epoch.pt \
@@ -337,21 +381,25 @@ python bin/test_models.py --model-files \
 
 To get BLAST-based predictions on the supervised setting, use the following code:
 
-```
-python bin/run_blast.py --test-data-path data/swissprot/proteinfer_splits/random/test_GO.fasta --train-data-path data/swissprot/proteinfer_splits/random/train_GO.fasta
+```sh
+python bin/run_blast.py \
+    --test-data-path data/swissprot/proteinfer_splits/random/test_GO.fasta \
+    --train-data-path data/swissprot/proteinfer_splits/random/train_GO.fasta
 ```
 
 The same command can be used to run the BLAST-based inference on subset query sets of different sizes. The runtime logged in the terminal was used in the runtime comparison figure of the paper in the Supplementary Information. The file names of the query subsets of different sizes follow the pattern: `test_*_GO.fasta` where `*` refers to the number of sequences. For example, to log the runtime in the terminal for 1 query sequence run:
 
-```
-python bin/run_blast.py --test-data-path data/swissprot/proteinfer_splits/random/test_1_GO.fasta --train-data-path data/swissprot/proteinfer_splits/random/train_GO.fasta
+```sh
+python bin/run_blast.py \
+    --test-data-path data/swissprot/proteinfer_splits/random/test_1_GO.fasta \
+    --train-data-path data/swissprot/proteinfer_splits/random/train_GO.fasta
 ```
 
 #### Calculate supervised metrics
 
 To calculate the supervised metrics for all models using the previously generated prediction files, run the following command:
 
-```
+```sh
 python bin/calculate_supervised_metrics.py 
 ```
 
@@ -362,8 +410,10 @@ This script calculates the mAP Macro and mAP Micro metrics for ProtNote and Prot
 ### Latest SwissProt data
 To download the **latest** SwissProt file run:
 
-```
-python bin/download_swissprot.py --url "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz" --output-file "uniprot_sprot_latest.dat"
+```sh
+python bin/download_swissprot.py \
+    --url "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz" \
+    --output-file "uniprot_sprot_latest.dat"
 ```
 
 In general, we recommend downloading the SwissProt data directly from their [release archive](https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/) for reproducibility.
