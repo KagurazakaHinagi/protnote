@@ -1,16 +1,18 @@
 import os
 import warnings
+
 warnings.simplefilter("ignore")
-from Bio.Blast.Applications import NcbimakeblastdbCommandline, NcbiblastpCommandline
-from tqdm import tqdm
+import multiprocessing
 import time
 from functools import partial
-from protnote.utils.data import read_fasta
-from protnote.utils.data import tqdm_joblib
-from protnote.utils.configs import get_logger
+
 import pandas as pd
-import multiprocessing
+from Bio.Blast.Applications import NcbiblastpCommandline, NcbimakeblastdbCommandline
 from joblib import Parallel, delayed
+from tqdm import tqdm
+
+from protnote.utils.configs import get_logger
+from protnote.utils.data import read_fasta, tqdm_joblib
 
 
 class BlastTopHits:
@@ -36,7 +38,9 @@ class BlastTopHits:
 
     def make_db(self):
         makeblastdb_cline = NcbimakeblastdbCommandline(
-            dbtype="prot", input_file=self.db_fasta_path, out=self.db_path
+            dbtype="prot",
+            input_file=self.db_fasta_path,
+            out=self.db_path,
         )
         _ = makeblastdb_cline()
 
@@ -71,13 +75,16 @@ class BlastTopHits:
         self.run_duration_seconds = get_results_end_time - get_results_start_time
 
         results = pd.read_csv(
-            output_path, sep="\t", header=None, names=list(self.columns.values())
+            output_path,
+            sep="\t",
+            header=None,
+            names=list(self.columns.values()),
         )
         results = results.loc[results.groupby("sequence_name")["bit_score"].idxmax()]
         results.to_csv(output_path, sep="\t", header=None, index=False)
 
         self.logger.info(
-            f"BLAST search completed in {self.run_duration_seconds:.2f} seconds."
+            f"BLAST search completed in {self.run_duration_seconds:.2f} seconds.",
         )
 
     def __parse_blast_line(self, line: str) -> dict:
@@ -95,7 +102,10 @@ class BlastTopHits:
         ]
 
     def parse_blast_line(
-        self, line, transfer_labels: bool, flatten_labels: bool = True
+        self,
+        line,
+        transfer_labels: bool,
+        flatten_labels: bool = True,
     ) -> list:
         fully_parsed_line = []
         parsed_line = self.__parse_blast_line(line=line)
@@ -108,7 +118,7 @@ class BlastTopHits:
                     [
                         {"transferred_labels": i, **parsed_line}
                         for i in transferred_labels
-                    ]
+                    ],
                 )
             else:
                 fully_parsed_line.append(parsed_line)
@@ -127,7 +137,7 @@ class BlastTopHits:
 
         parse_results_start_time = time.time()
 
-        with open(blast_results_path, "r") as handle:
+        with open(blast_results_path) as handle:
             lines = handle.readlines()
             wrapper = partial(
                 self.parse_blast_line,
@@ -152,7 +162,7 @@ class BlastTopHits:
             parse_results_end_time - parse_results_start_time
         )
         self.logger.info(
-            f"BLAST parsing completed in {self.parse_results_duration_seconds:.2f} seconds."
+            f"BLAST parsing completed in {self.parse_results_duration_seconds:.2f} seconds.",
         )
 
         return pd.DataFrame.from_records(flattened_parsed_results)

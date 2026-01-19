@@ -1,9 +1,8 @@
 import torch
-from typing import List, Tuple
 
 
 def collate_variable_sequence_length(
-    batch: List[Tuple],
+    batch: list[tuple],
     label_sample_size=None,
     distribute_labels=False,
     shuffle_labels=False,
@@ -13,8 +12,7 @@ def collate_variable_sequence_length(
     world_size=1,
     rank=0,
 ):
-    """
-    Collates a batch of data with variable sequence lengths. Pads sequences to the maximum length within the batch to handle the variable
+    """Collates a batch of data with variable sequence lengths. Pads sequences to the maximum length within the batch to handle the variable
     lengths.
 
     Args:
@@ -41,7 +39,6 @@ def collate_variable_sequence_length(
               - 'label_token_counts': Tensor, token counts for each label.
 
     """
-
     # Determine the maximum sequence length in the batch
     max_length = max(item["sequence_length"] for item in batch)
 
@@ -54,15 +51,15 @@ def collate_variable_sequence_length(
     processed_label_embeddings = None
 
     if grid_sampler:
-        assert (
-            label_sample_size is not None
-        ), "Must provide label_sample_size if using grid sampler"
+        assert label_sample_size is not None, (
+            "Must provide label_sample_size if using grid sampler"
+        )
         assert not in_batch_sampling, "Can't use in batch sampling with grid sampler"
 
     else:
-        assert not (
-            in_batch_sampling and (label_sample_size is not None)
-        ), "Cant use both in_batch_sampling with lable_sample_size"
+        assert not (in_batch_sampling and (label_sample_size is not None)), (
+            "Cant use both in_batch_sampling with lable_sample_size"
+        )
 
     sampled_label_indices = None
     num_labels = batch[0]["label_multihots"].shape[0]
@@ -70,31 +67,30 @@ def collate_variable_sequence_length(
     if label_sample_size:
         if grid_sampler:
             sampled_label_indices = batch[0]["label_idxs"]
+        elif not distribute_labels:
+            # If not distributing labels, sample from entire dataset
+            sampled_label_indices = (
+                torch.randperm(num_labels)[:label_sample_size]
+                if shuffle_labels
+                else torch.arange(label_sample_size)
+            )
         else:
-            if not distribute_labels:
-                # If not distributing labels, sample from entire dataset
-                sampled_label_indices = (
-                    torch.randperm(num_labels)[:label_sample_size]
-                    if shuffle_labels
-                    else torch.arange(label_sample_size)
-                )
-            else:
-                # Otherwise, sample from the labels on this GPU
-                labels_per_partition = num_labels // world_size
-                start_idx = rank * labels_per_partition
-                end_idx = start_idx + labels_per_partition
-                partition_indices = torch.arange(start_idx, end_idx)
-                sampled_label_indices = partition_indices[
-                    torch.randperm(len(partition_indices))[
-                        : label_sample_size // world_size
-                    ]
+            # Otherwise, sample from the labels on this GPU
+            labels_per_partition = num_labels // world_size
+            start_idx = rank * labels_per_partition
+            end_idx = start_idx + labels_per_partition
+            partition_indices = torch.arange(start_idx, end_idx)
+            sampled_label_indices = partition_indices[
+                torch.randperm(len(partition_indices))[
+                    : label_sample_size // world_size
                 ]
-                # if rank < 2:
-                #     print("GPU {}. Sampling range: {} to {}. Sampled {} labels".format(rank, start_idx, end_idx, sampled_label_indices[:10]))
+            ]
+            # if rank < 2:
+            #     print("GPU {}. Sampling range: {} to {}. Sampled {} labels".format(rank, start_idx, end_idx, sampled_label_indices[:10]))
 
     elif in_batch_sampling:
         sampled_label_indices = torch.where(
-            sum(i["label_multihots"] for i in batch) > 0
+            sum(i["label_multihots"] for i in batch) > 0,
         )[0]
 
     # Apply the sampled labels to the label embeddings
@@ -128,8 +124,9 @@ def collate_variable_sequence_length(
         # Pad the sequence to the max_length and append to the processed_sequences list
         processed_sequence_onehots.append(
             torch.cat(
-                (sequence_onehots, torch.zeros((sequence_dim, padding_length))), dim=1
-            )
+                (sequence_onehots, torch.zeros((sequence_dim, padding_length))),
+                dim=1,
+            ),
         )
 
         # Use the sampled labels for each element in the batch.

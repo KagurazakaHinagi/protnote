@@ -1,14 +1,14 @@
-import torch
-from typing import Literal, Text, Optional
 import numpy as np
-from ..data.datasets import set_padding_to_sentinel
+import torch
+
 from protnote.utils.proteinfer import transfer_tf_weights_to_torch
+
+from ..data.datasets import set_padding_to_sentinel
 
 
 class MaskedConv1D(torch.nn.Conv1d):
     def forward(self, x, sequence_lengths):
-        """
-        Correct for padding before and after. Can be redundant
+        """Correct for padding before and after. Can be redundant
         but reduces overhead of setting padding to sentiel in other contexts.
         """
         x = set_padding_to_sentinel(x, sequence_lengths, 0)
@@ -33,7 +33,8 @@ class Residual(torch.nn.Module):
 
         bottleneck_out_channels = int(np.floor(input_channels * bottleneck_factor))
         self.bn_activation_1 = torch.nn.Sequential(
-            torch.nn.BatchNorm1d(input_channels, eps=0.001, momentum=0.01), activation()
+            torch.nn.BatchNorm1d(input_channels, eps=0.001, momentum=0.01),
+            activation(),
         )
 
         self.masked_conv1 = MaskedConv1D(
@@ -99,11 +100,12 @@ class ProteInfer(torch.nn.Module):
                     dilation=dilation_base**i,
                     bottleneck_factor=bottleneck_factor,
                     activation=activation,
-                )
+                ),
             )
 
         self.output_layer = torch.nn.Linear(
-            in_features=output_channels, out_features=num_labels
+            in_features=output_channels,
+            out_features=num_labels,
         )
 
     def get_embeddings(self, x, sequence_lengths):
@@ -113,7 +115,7 @@ class ProteInfer(torch.nn.Module):
             features = resnet_block(features, sequence_lengths)
         features = set_padding_to_sentinel(features, sequence_lengths, 0)
         features = torch.sum(features, dim=-1) / sequence_lengths.unsqueeze(
-            -1
+            -1,
         )  # Average pooling
         return features
 
@@ -135,9 +137,7 @@ class ProteInfer(torch.nn.Module):
         num_resnet_blocks: int,
         bottleneck_factor: float,
     ):
-        """
-        Load a pretrained model from a path or url.
-        """
+        """Load a pretrained model from a path or url."""
         model = cls(
             num_labels,
             input_channels,

@@ -1,13 +1,12 @@
-import pandas as pd
-import obonet
-import gc
-from pathlib import Path
-from tqdm import tqdm
 import argparse
-import matplotlib.pyplot as plt
-from protnote.utils.notebooks import *
-from protnote.utils.configs import load_config, construct_absolute_paths
+import gc
 
+import obonet
+import pandas as pd
+from tqdm import tqdm
+
+from protnote.utils.configs import construct_absolute_paths, load_config
+from protnote.utils.notebooks import *
 
 
 def main():
@@ -21,21 +20,26 @@ def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(
         description="""
-            Calculate the metrics for protnote,proteinfer and blast on the same test set given predictions for each. 
+            Calculate the metrics for protnote,proteinfer and blast on the same test set given predictions for each.
             It's design for multiple predictions per model (except blast), one for each seed.
-            """
-        )
+            """,
+    )
     parser.add_argument(
         "--proteinfer-prediction-files",
         nargs="+",
-        default=[f'test_logits_GO_TEST_DATA_PATH_proteinfer{id}.h5' for id in pinf_model_ids],
+        default=[
+            f"test_logits_GO_TEST_DATA_PATH_proteinfer{id}.h5" for id in pinf_model_ids
+        ],
         required=False,
         help="List of Proteinfer prediction files, potentially from different seeds",
     )
     parser.add_argument(
         "--protnote-prediction-files",
         nargs="+",
-        default=[f'test_1_logits_TEST_DATA_PATH_seed_replicates_v9_{seed}_sum_last_epoch.h5' for seed in seeds],
+        default=[
+            f"test_1_logits_TEST_DATA_PATH_seed_replicates_v9_{seed}_sum_last_epoch.h5"
+            for seed in seeds
+        ],
         required=False,
         help="List of ProtNote prediction files, potentially from different seeds",
     )
@@ -51,7 +55,7 @@ def main():
     parser.add_argument(
         "--output-file",
         type=str,
-        default='supervised_metrics_df.parquet',
+        default="supervised_metrics_df.parquet",
         required=False,
         help="the file that will store all the metrics",
     )
@@ -72,14 +76,21 @@ def main():
         help="The name of the test set used to evaluate the predictions",
     )
 
-
     args = parser.parse_args()
 
-    args.proteinfer_prediction_files = construct_absolute_paths(results_dir,args.proteinfer_prediction_files)
-    args.protnote_prediction_files = construct_absolute_paths(results_dir,args.protnote_prediction_files)
-    args.blast_predictions_file = construct_absolute_paths(results_dir,[args.blast_predictions_file])
+    args.proteinfer_prediction_files = construct_absolute_paths(
+        results_dir, args.proteinfer_prediction_files,
+    )
+    args.protnote_prediction_files = construct_absolute_paths(
+        results_dir, args.protnote_prediction_files,
+    )
+    args.blast_predictions_file = construct_absolute_paths(
+        results_dir, [args.blast_predictions_file],
+    )
     args.output_file = results_dir / args.output_file
-    graph_2019 = obonet.read_obo(project_root / "data" / "annotations" / args.go_graph_file)
+    graph_2019 = obonet.read_obo(
+        project_root / "data" / "annotations" / args.go_graph_file,
+    )
     threshold = 0.5
     device = "cpu"
 
@@ -93,10 +104,14 @@ def main():
     models_logits = {
         "Proteinfer": args.proteinfer_prediction_files,
         "ProtNote": args.protnote_prediction_files,
-        "baseline_blast": args.blast_predictions_file
+        "baseline_blast": args.blast_predictions_file,
     }
 
-    models_labels = pd.read_hdf(str(args.protnote_prediction_files[0]).replace('logits','labels'), key="labels_df", mode="r").astype("float32")
+    models_labels = pd.read_hdf(
+        str(args.protnote_prediction_files[0]).replace("logits", "labels"),
+        key="labels_df",
+        mode="r",
+    ).astype("float32")
 
     metrics_df = []
     models = list(models_logits.keys())
@@ -108,12 +123,16 @@ def main():
                 logits_df = pd.read_parquet(file)
             elif str(file).endswith(".h5"):
                 logits_df = pd.read_hdf(file, key="logits_df", mode="r").astype(
-                    "float32"
+                    "float32",
                 )
                 print("read logits of shape: ", logits_df.shape)
 
             metrics = metrics_by_go_ontology(
-                logits_df, models_labels, graph_2019, device, threshold
+                logits_df,
+                models_labels,
+                graph_2019,
+                device,
+                threshold,
             )
 
             metrics = pd.DataFrame(metrics)
@@ -125,12 +144,13 @@ def main():
 
             del logits_df
             gc.collect()
-        print('-----------------')
+        print("-----------------")
 
     metrics_df = pd.concat(metrics_df)
     metrics_df.columns = metrics_df.columns.map(ontology2alias)
 
     metrics_df.to_parquet(args.output_file)
+
 
 if __name__ == "__main__":
     main()

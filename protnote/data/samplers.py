@@ -1,28 +1,22 @@
+import math
 import random
 from itertools import product
+
 import numpy as np
-from torch.utils.data import BatchSampler
-from torch.utils.data import Sampler, WeightedRandomSampler
-from typing import Optional
-import math
 import torch
-from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
-import math
-from torch.utils.data import Dataset
+from torch.utils.data import BatchSampler, Dataset, Sampler, WeightedRandomSampler
+from torch.utils.data.distributed import DistributedSampler
 
 
 class GeneralDistributedSampler(DistributedSampler):
-
-    """
-    Class to use distributed sampler with any sampler!
-    """
+    """Class to use distributed sampler with any sampler!"""
 
     def __init__(
         self,
         sampler: Sampler,
-        num_replicas: Optional[int] = None,
-        rank: Optional[int] = None,
+        num_replicas: int | None = None,
+        rank: int | None = None,
         seed: int = 0,
         drop_last: bool = False,
     ):
@@ -97,14 +91,20 @@ class DistributedWeightedSampler(Sampler):
         # Create a weighted sample for the entire dataset
         if self.replacement:
             indices = torch.multinomial(
-                self.weights, self.total_size, replacement=True, generator=g
+                self.weights,
+                self.total_size,
+                replacement=True,
+                generator=g,
             )
         else:
-            assert (
-                len(self.weights) > self.total_size
-            ), "When sampling without replacement, number of samples to draw must be less than the number of elements in the dataset"
+            assert len(self.weights) > self.total_size, (
+                "When sampling without replacement, number of samples to draw must be less than the number of elements in the dataset"
+            )
             indices = torch.multinomial(
-                self.weights, self.total_size, replacement=False, generator=g
+                self.weights,
+                self.total_size,
+                replacement=False,
+                generator=g,
             )
 
         # Subsample for the current process
@@ -156,7 +156,7 @@ class GridBatchSampler(BatchSampler):
 
         print("Getting combinations...")
         obs_labels_batch_combinations = list(
-            product(observation_batches, label_batches)
+            product(observation_batches, label_batches),
         )
 
         print("Done...")
@@ -167,7 +167,7 @@ class GridBatchSampler(BatchSampler):
         print("Done...")
         for observation_batch, label_batch in obs_labels_batch_combinations:
             yield list(
-                product(observation_batch, [label_batch])
+                product(observation_batch, [label_batch]),
             )  # [observation_batch,label_batch]
 
     def calculate_num_batches(self):
@@ -181,7 +181,7 @@ class GridBatchSampler(BatchSampler):
 
         self.total_num_batches = int(num_label_batches * num_observation_batches)
         print(
-            f"num label batches = {num_label_batches}, num observation batches = {num_observation_batches}"
+            f"num label batches = {num_label_batches}, num observation batches = {num_observation_batches}",
         )
         print(f"total batches = {self.total_num_batches}")
 
@@ -241,7 +241,9 @@ def observation_sampler_factory(
         assert sequence_weights is not None, "Weighted RandomSampler requires weights"
 
         sampler = WeightedRandomSampler(
-            sequence_weights, len(sequence_weights), replacement=True
+            sequence_weights,
+            len(sequence_weights),
+            replacement=True,
         )
     elif not distribute_labels and world_size > 1 and weighted_sampling:
         # If distributing sequences across multiple GPUs with a weighted sampler, create custom DistributedWeightedSampler
@@ -257,12 +259,15 @@ def observation_sampler_factory(
         assert dataset is not None, "DistributeSampler requires dataset"
 
         sampler = DistributedSampler(
-            dataset, num_replicas=world_size, rank=rank, shuffle=shuffle
+            dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=shuffle,
         )
     else:
         # Raise error
         raise ValueError(
-            "Invalid combination of WEIGHTED_SAMPLING, WORLD_SIZE, and DISTRIBUTE_LABELS parameters"
+            "Invalid combination of WEIGHTED_SAMPLING, WORLD_SIZE, and DISTRIBUTE_LABELS parameters",
         )
 
     return sampler

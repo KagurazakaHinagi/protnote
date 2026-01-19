@@ -1,15 +1,18 @@
+import os
+
 import pandas as pd
 import wget
-import os
+
+from protnote.utils.configs import get_project_root
 from protnote.utils.data import (
-    save_to_pickle,
     get_ec_class_descriptions,
     get_ec_number_description,
+    save_to_pickle,
 )
-from protnote.utils.configs import get_project_root
+
 
 def main():
-    output_dir = get_project_root() / 'data' / 'annotations'
+    output_dir = get_project_root() / "data" / "annotations"
     ec_classes_data = "https://ftp.expasy.org/databases/enzyme/enzclass.txt"
     ec_numbers_data = "https://ftp.expasy.org/databases/enzyme/enzyme.dat"
     enzclass_output_path = output_dir / "enzclass.txt"
@@ -38,10 +41,11 @@ def main():
     ec_annotations.index.name = None
     ec_annotations["name"] = ec_annotations["synonym_exact"] = ec_annotations["label"]
     ec_annotations["synonym_exact"] = ec_annotations["synonym_exact"].apply(
-        lambda x: [x]
+        lambda x: [x],
     )
 
     save_to_pickle(ec_annotations, annotations_output_path)
+
 
 if __name__ == "__main__":
     main()

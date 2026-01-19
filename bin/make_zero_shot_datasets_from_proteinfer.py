@@ -1,23 +1,26 @@
 import os
 import random
 from argparse import ArgumentParser
+
 from tqdm import tqdm
-from protnote.utils.data import read_fasta, save_to_fasta, generate_vocabularies
-from datetime import datetime
+
 from protnote.utils.configs import load_config
+from protnote.utils.data import generate_vocabularies, read_fasta, save_to_fasta
 
 
 def split_labels(label_vocabulary):
-    """
-    Split the label vocabulary into training, validation, and test sets.
+    """Split the label vocabulary into training, validation, and test sets.
 
-    Parameters:
+    Parameters
+    ----------
     - label_vocabulary: list, a list of unique labels.
 
-    Returns:
+    Returns
+    -------
     - tuple of lists, containing train_labels, val_labels, and test_labels.
+
     """
-    #set seed as 42 for random.shuffle
+    # set seed as 42 for random.shuffle
     random.seed(42)
     random.shuffle(label_vocabulary)
     train_size = len(label_vocabulary) * 80 // 100
@@ -29,15 +32,17 @@ def split_labels(label_vocabulary):
 
 
 def filter_dataset(dataset, labels, desc="Filtering dataset"):
-    """
-    Filter the dataset to include only sequences with specified labels.
+    """Filter the dataset to include only sequences with specified labels.
 
-    Parameters:
+    Parameters
+    ----------
     - dataset: list of tuples, where each tuple is (sequence, labels) to be filtered.
     - labels: list, labels to retain in the dataset.
 
-    Returns:
+    Returns
+    -------
     - list, filtered dataset with only specified labels.
+
     """
     labels_set = set(labels)  # Convert list to set for O(1) lookup
     filtered = [
@@ -52,39 +57,39 @@ def filter_dataset(dataset, labels, desc="Filtering dataset"):
 
 
 def main():
-    """
-    Main function to filter fasta files based on label vocabulary and save the filtered datasets.
+    """Main function to filter fasta files based on label vocabulary and save the filtered datasets.
 
-    Parameters:
+    Parameters
+    ----------
     - train_path: str, path to the training set fasta file.
     - val_path: str, path to the validation set fasta file.
     - test_path: str, path to the test set fasta file.
     - label_vocab_path: str, path to the label vocabulary JSON file.
     - output_path: str, directory where the filtered fasta files will be saved.
-    """
 
+    """
     config, project_root = load_config()
 
     parser = ArgumentParser(
-        description="Filter and save datasets for zero-shot learning."
+        description="Filter and save datasets for zero-shot learning.",
     )
     parser.add_argument(
         "--train-path",
         required=False,
         help="Path to the training set fasta file.",
-        default=config["paths"]['data_paths']['TRAIN_DATA_PATH'],
+        default=config["paths"]["data_paths"]["TRAIN_DATA_PATH"],
     )
     parser.add_argument(
         "--val-path",
         required=False,
         help="Path to the validation set fasta file.",
-        default=config["paths"]['data_paths']['VAL_DATA_PATH'],
+        default=config["paths"]["data_paths"]["VAL_DATA_PATH"],
     )
     parser.add_argument(
         "--test-path",
         required=False,
         help="Path to the test set fasta file.",
-        default=config["paths"]['data_paths']['TEST_DATA_PATH'],
+        default=config["paths"]["data_paths"]["TEST_DATA_PATH"],
     )
     args = parser.parse_args()
 
@@ -93,24 +98,32 @@ def main():
     val = read_fasta(args.val_path)
     test = read_fasta(args.test_path)
 
-    label_vocabulary = generate_vocabularies(file_path=str(config["paths"]['data_paths']['FULL_DATA_PATH']))["label_vocab"]
+    label_vocabulary = generate_vocabularies(
+        file_path=str(config["paths"]["data_paths"]["FULL_DATA_PATH"]),
+    )["label_vocab"]
 
     train_labels, val_labels, test_labels = split_labels(label_vocabulary)
 
     filtered_datasets = {
         "train_GO_zero_shot.fasta": filter_dataset(
-            train, train_labels, desc="Filtering training set"
+            train,
+            train_labels,
+            desc="Filtering training set",
         ),
         "dev_GO_zero_shot.fasta": filter_dataset(
-            val, val_labels, desc="Filtering validation set"
+            val,
+            val_labels,
+            desc="Filtering validation set",
         ),
         "test_GO_zero_shot.fasta": filter_dataset(
-            test, test_labels, desc="Filtering test set"
+            test,
+            test_labels,
+            desc="Filtering test set",
         ),
     }
 
     for filename, dataset in filtered_datasets.items():
-        save_to_fasta(dataset, os.path.join(output_path, 'fake_' + filename))
+        save_to_fasta(dataset, os.path.join(output_path, "fake_" + filename))
 
 
 if __name__ == "__main__":

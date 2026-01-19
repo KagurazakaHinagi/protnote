@@ -1,20 +1,22 @@
-import torch
-import pandas as pd
 import os
-from protnote.utils.data import convert_float16_to_float32
+import re
+from typing import Literal
+
+import numpy as np
+import pandas as pd
+import torch
+from torchmetrics import Metric, MetricCollection
 from torchmetrics.classification import (
-    Precision,
-    Recall,
+    AveragePrecision,
     BinaryPrecision,
     BinaryRecall,
     F1Score,
-    AveragePrecision,
+    Precision,
+    Recall,
 )
-from torchmetrics import MetricCollection, Metric
-from typing import Literal
-import re
-import numpy as np
 from tqdm import tqdm
+
+from protnote.utils.data import convert_float16_to_float32
 
 
 class SamplewisePrecision(Metric):
@@ -22,7 +24,8 @@ class SamplewisePrecision(Metric):
         super().__init__()
         self.threshold = threshold
         self.precision_samplewise = BinaryPrecision(
-            threshold=threshold, multidim_average="samplewise"
+            threshold=threshold,
+            multidim_average="samplewise",
         )
 
     def update(self, probas: torch.Tensor, labels: torch.Tensor):
@@ -48,7 +51,8 @@ class SamplewiseRecall(Metric):
         super().__init__()
         self.threshold = threshold
         self.recall_samplewise = BinaryRecall(
-            threshold=self.threshold, multidim_average="samplewise"
+            threshold=self.threshold,
+            multidim_average="samplewise",
         )
 
     def update(self, probas: torch.Tensor, labels: torch.Tensor):
@@ -89,7 +93,8 @@ class SamplewiseF1Score(Metric):
         self.threshold = threshold
         self.precision_samplewise = SamplewisePrecision(threshold)
         self.recall_samplewise = BinaryRecall(
-            threshold=threshold, multidim_average="samplewise"
+            threshold=threshold,
+            multidim_average="samplewise",
         )
 
     def update(self, probas: torch.Tensor, labels: torch.Tensor):
@@ -170,7 +175,9 @@ class EvalMetrics:
 
             if num_labels is not None:
                 label_centered_metrics[f"map_{average}"] = AveragePrecision(
-                    num_labels=num_labels, task="multilabel", average=average
+                    num_labels=num_labels,
+                    task="multilabel",
+                    average=average,
                 ).to(self.device)
 
         return label_centered_metrics
@@ -186,16 +193,17 @@ class EvalMetrics:
         sample_centered_metrics = {}
         if threshold is not None:
             sample_centered_metrics["precision_samplewise"] = SamplewisePrecision(
-                threshold=threshold
+                threshold=threshold,
             ).to(self.device)
             sample_centered_metrics["f1_samplewise"] = SamplewiseF1Score(
-                threshold=threshold
+                threshold=threshold,
             ).to(self.device)
             sample_centered_metrics["recall_samplewise"] = SamplewiseRecall(
-                threshold=threshold
+                threshold=threshold,
             ).to(self.device)
             sample_centered_metrics["coverage_samplewise"] = SamplewiseCoverage(
-                threshold=threshold, device=self.device
+                threshold=threshold,
+                device=self.device,
             ).to(self.device)
         return sample_centered_metrics
 
@@ -217,14 +225,16 @@ class EvalMetrics:
         """
         if type == "labeled_centered":
             metrics = self._get_label_centered_metrics(
-                threshold=threshold, num_labels=num_labels
+                threshold=threshold,
+                num_labels=num_labels,
             )
         elif type == "sample_centered":
             metrics = self._get_sample_centered_metrics(threshold=threshold)
         elif type == "all":
             metrics = {
                 **self._get_label_centered_metrics(
-                    threshold=threshold, num_labels=num_labels
+                    threshold=threshold,
+                    num_labels=num_labels,
                 ),
                 **self._get_sample_centered_metrics(threshold=threshold),
             }
@@ -233,7 +243,10 @@ class EvalMetrics:
         return MetricCollection(metrics)
 
     def get_metric_collection_with_regex(
-        self, pattern: str, num_labels: int, threshold: float = None
+        self,
+        pattern: str,
+        num_labels: int,
+        threshold: float = None,
     ) -> MetricCollection:
         """_summary_
 
@@ -245,13 +258,18 @@ class EvalMetrics:
         :rtype: MetricCollection
         """
         metrics = self.get_metric_collection(
-            type="all", threshold=threshold, num_labels=num_labels
+            type="all",
+            threshold=threshold,
+            num_labels=num_labels,
         )
         metrics = {k: v for k, v in metrics.items() if re.match(pattern, k)}
         return MetricCollection(metrics)
 
     def get_metric_by_name(
-        self, name: str, num_labels: int, threshold: float = None
+        self,
+        name: str,
+        num_labels: int,
+        threshold: float = None,
     ) -> Metric:
         """_summary_
 
@@ -263,11 +281,13 @@ class EvalMetrics:
         :rtype: Metric
         """
         metrics = self.get_metric_collection(
-            type="all", num_labels=num_labels, threshold=threshold
+            type="all",
+            num_labels=num_labels,
+            threshold=threshold,
         )
-        assert (
-            name in metrics
-        ), f"Unknown metric {name}. Available metrics are {metrics.keys()}"
+        assert name in metrics, (
+            f"Unknown metric {name}. Available metrics are {metrics.keys()}"
+        )
         return metrics[name]
 
 
@@ -289,10 +309,13 @@ def save_evaluation_results(
     else:
         logits_df_cols = label_vocabulary
         labels_df = pd.DataFrame(
-            results["labels"], columns=label_vocabulary, index=results["sequence_ids"]
+            results["labels"],
+            columns=label_vocabulary,
+            index=results["sequence_ids"],
         )
         labels_df_output_path = os.path.join(
-            output_dir, f"{data_split_name}_labels_{run_name}.parquet"
+            output_dir,
+            f"{data_split_name}_labels_{run_name}.parquet",
         )
 
         if save_as_h5:
@@ -305,11 +328,14 @@ def save_evaluation_results(
             labels_df.to_parquet(labels_df_output_path)
 
     logits_df = pd.DataFrame(
-        results["logits"], columns=logits_df_cols, index=results["sequence_ids"]
+        results["logits"],
+        columns=logits_df_cols,
+        index=results["sequence_ids"],
     )
 
     logits_df_output_path = os.path.join(
-        output_dir, f"{data_split_name}_logits_{run_name}.parquet"
+        output_dir,
+        f"{data_split_name}_logits_{run_name}.parquet",
     )
 
     if save_as_h5:
@@ -323,7 +349,10 @@ def save_evaluation_results(
 
 
 def metrics_per_label_df(
-    logits_df: pd.DataFrame, labels_df: pd.DataFrame, device: str, threshold: None
+    logits_df: pd.DataFrame,
+    labels_df: pd.DataFrame,
+    device: str,
+    threshold: None,
 ) -> pd.DataFrame:
     """Calculate the following per label metrics: Average Precision,F1,Precision,Recall,label frequency
 
@@ -341,7 +370,6 @@ def metrics_per_label_df(
     :rtype: pd.DataFrame
 
     """
-
     rows = []
     labels = labels_df.columns
     mask_at_least_one_label = labels_df.sum() > 0
@@ -381,6 +409,8 @@ def metrics_per_label_df(
 
     metrics = pd.DataFrame(rows, index=labels_at_least_one_pos)
     metrics_undefined = pd.DataFrame(
-        np.nan, columns=metrics.columns, index=labels_undefined
+        np.nan,
+        columns=metrics.columns,
+        index=labels_undefined,
     )
     return pd.concat([metrics, metrics_undefined])

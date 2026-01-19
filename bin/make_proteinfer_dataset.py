@@ -1,12 +1,15 @@
-import os
-import logging
-from torchdata.datapipes.iter import FileLister, FileOpener
 import argparse
+import logging
+import os
+
+from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio import SeqIO
+from torchdata.datapipes.iter import FileLister, FileOpener
 from tqdm import tqdm
-from protnote.utils.configs import get_project_root, load_config
+
+from protnote.utils.configs import load_config
+
 
 def process_sequence_tfrecord(record: dict, annotation_types: list):
     sequence = record["sequence"][0].decode()
@@ -71,28 +74,35 @@ if __name__ == "__main__":
     Example usage: python bin/make_proteinfer_dataset.py --dataset-type random --annotation-types GO
     """
     logging.basicConfig(
-        format="%(asctime)s | %(levelname)s: %(message)s", level=logging.NOTSET
+        format="%(asctime)s | %(levelname)s: %(message)s",
+        level=logging.NOTSET,
     )
     parser = argparse.ArgumentParser()
 
     config, project_root = load_config()
-    
+
     # TODO: I/O paths could be not required and default to some env var
     parser.add_argument(
         "--dataset-type",
         required=True,
-        help='The specific type of ProteInfer dataset. Two choices: random, clustered',
-        default = 'random'
+        help="The specific type of ProteInfer dataset. Two choices: random, clustered",
+        default="random",
     )
 
     parser.add_argument(
         "--annotation-types",
         nargs="+",
-        required=True
+        required=True,
     )
-    
+
     args = parser.parse_args()
-    input_dir = project_root / "data" / "swissprot" / "proteinfer_splits" / f"{args.dataset_type}"
+    input_dir = (
+        project_root
+        / "data"
+        / "swissprot"
+        / "proteinfer_splits"
+        / f"{args.dataset_type}"
+    )
 
     dirname = os.path.dirname(__file__)
 

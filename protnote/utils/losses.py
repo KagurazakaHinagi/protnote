@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 import torch.nn.functional as F
 
 
@@ -12,8 +12,7 @@ class SupCon(torch.nn.Module):
         assert temperature is not None, "temperature must be provided and not None"
 
     def forward(self, input, target):
-        """
-        Computes the symmetric contrastive loss between protein and label embeddings, given a temperature parameter and a ground truth annotation matrix.
+        """Computes the symmetric contrastive loss between protein and label embeddings, given a temperature parameter and a ground truth annotation matrix.
         P_e: Batch of projected protein embeddings [batch_size, joint_embedding_dim]
         L_e: Batch of projected GO label embeddings [batch_size, joint_embedding_dim]
         t: Temperature parameter
@@ -33,9 +32,7 @@ class SupCon(torch.nn.Module):
 
 
 def one_way_supcon(logits, labels_multihot, dim):
-    """
-    dim=1 is traditional entropy of predicting labels
-    """
+    """dim=1 is traditional entropy of predicting labels"""
     # for numerical stability
     logits_max, _ = torch.max(logits, dim=dim, keepdim=True)
     logits = logits - logits_max.detach()
@@ -48,7 +45,8 @@ def one_way_supcon(logits, labels_multihot, dim):
     norm = labels_multihot.sum(dim)
     mean_log_prob_pos = (labels_multihot * log_prob).sum(dim) / norm
     mean_log_prob_pos = torch.nan_to_num(
-        mean_log_prob_pos, 0
+        mean_log_prob_pos,
+        0,
     )  # In case dim = 0 and there are labels always negative
     # loss
     loss = -mean_log_prob_pos.mean()
@@ -63,13 +61,15 @@ class RGDBCE(torch.nn.Module):
 
     def forward(self, input, target):
         loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            input, target, reduce="none"
+            input,
+            target,
+            reduce="none",
         )
         return (
             loss
             * torch.exp(
                 torch.clamp(loss.detach(), max=self.temperature)
-                / (self.temperature + 1)
+                / (self.temperature + 1),
             )
         ).mean()
 
@@ -88,7 +88,9 @@ class CBLoss(torch.nn.Module):
 
         # Replace zeros in effective_num with 'inf' (infinity) to avoid division by zero
         effective_num = torch.where(
-            effective_num == 0, torch.tensor(float("inf")), effective_num
+            effective_num == 0,
+            torch.tensor(float("inf")),
+            effective_num,
         )
 
         weights = (1.0 - self.beta) / effective_num
@@ -96,7 +98,9 @@ class CBLoss(torch.nn.Module):
 
         weights = get_batch_weights_v2(weights, target)
         cb_loss = F.binary_cross_entropy_with_logits(
-            input=input, target=target, weight=weights
+            input=input,
+            target=target,
+            weight=weights,
         )
 
         return cb_loss
@@ -110,10 +114,13 @@ class WeightedBCE(torch.nn.Module):
 
     def forward(self, input, target):
         batch_weights = get_batch_weights_v2(
-            label_weights=self.label_weights, target=target
+            label_weights=self.label_weights,
+            target=target,
         )
         return torch.nn.functional.binary_cross_entropy_with_logits(
-            input, target, weight=batch_weights
+            input,
+            target,
+            weight=batch_weights,
         )
 
 
@@ -138,7 +145,9 @@ class BatchWeightedBCE(torch.nn.Module):
 
         # Compute weighted binary cross-entropy loss
         return torch.nn.functional.binary_cross_entropy_with_logits(
-            input, target, weight=weight_tensor
+            input,
+            target,
+            weight=weight_tensor,
         )
 
 
@@ -164,13 +173,19 @@ class BatchLabelWeightedBCE(torch.nn.Module):
 
         # Compute weighted binary cross-entropy loss
         return torch.nn.functional.binary_cross_entropy_with_logits(
-            input, target, weight=weights.unsqueeze(0)
+            input,
+            target,
+            weight=weights.unsqueeze(0),
         )
 
 
 class FocalLoss(torch.nn.Module):
     def __init__(
-        self, alpha: float, gamma: float, reduction="mean", label_smoothing=0.0
+        self,
+        alpha: float,
+        gamma: float,
+        reduction="mean",
+        label_smoothing=0.0,
     ):
         super().__init__()
         self.alpha = alpha
@@ -178,13 +193,11 @@ class FocalLoss(torch.nn.Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
 
-        assert (alpha is not None) & (
-            gamma is not None
-        ), "Both gamma and alpha must be provided and neither should be None"
+        assert (alpha is not None) & (gamma is not None), (
+            "Both gamma and alpha must be provided and neither should be None"
+        )
         print(
-            "Focal Loss with alpha: {}, gamma: {}, reduction: {}, label_smoothing: {}".format(
-                alpha, gamma, reduction, label_smoothing
-            )
+            f"Focal Loss with alpha: {alpha}, gamma: {gamma}, reduction: {reduction}, label_smoothing: {label_smoothing}",
         )
 
     def forward(self, input, target):
@@ -207,15 +220,13 @@ class FocalLoss(torch.nn.Module):
 
         if self.reduction == "mean":
             return loss.mean()
-        elif self.reduction == "sum":
+        if self.reduction == "sum":
             return loss.sum()
-        else:
-            return loss
+        return loss
 
 
 def get_batch_weights_v2(label_weights, target):
-    """
-    Computes the weights for each sample in the batch based on the target labels
+    """Computes the weights for each sample in the batch based on the target labels
     using broadcasting.
 
     Args:
@@ -224,8 +235,8 @@ def get_batch_weights_v2(label_weights, target):
 
     Returns:
         weights_for_samples: torch.tensor of size [batch, no_of_classes].
-    """
 
+    """
     # Ensure label_weights is a float tensor for correct broadcasting and computation
     label_weights = label_weights.float()
 
@@ -244,8 +255,7 @@ def get_batch_weights_v2(label_weights, target):
 
 
 def get_batch_weights_v1(label_weights, target=None):
-    """
-    This function applies the given Sample Weighting Scheme and returns the sample weights normalized over a batch
+    """This function applies the given Sample Weighting Scheme and returns the sample weights normalized over a batch
     Args:
         label_weights: A tensor of size [no_of_classes] with the weight of each label
         target: torch.tensor of size [batch, no_of_classes]
@@ -253,13 +263,13 @@ def get_batch_weights_v1(label_weights, target=None):
 
     Returns:
         weights_for_samples: torch.tensor of size [batch, no_of_classes]
-    """
 
+    """
     no_of_classes = len(label_weights)
 
     weights_for_samples = label_weights.unsqueeze(0)
     weights_for_samples = torch.tensor(
-        np.array(weights_for_samples.repeat(target.shape[0], 1) * target)
+        np.array(weights_for_samples.repeat(target.shape[0], 1) * target),
     )
     weights_for_samples = weights_for_samples.sum(1)
     weights_for_samples = weights_for_samples.unsqueeze(1)
@@ -274,21 +284,20 @@ def get_loss(
 ):
     if config["params"]["LOSS_FN"] == "BCE":
         return torch.nn.BCEWithLogitsLoss(reduction="mean", pos_weight=bce_pos_weight)
-    elif config["params"]["LOSS_FN"] == "WeightedBCE":
+    if config["params"]["LOSS_FN"] == "WeightedBCE":
         return WeightedBCE(label_weights=label_weights)
-    elif config["params"]["LOSS_FN"] == "CBLoss":
+    if config["params"]["LOSS_FN"] == "CBLoss":
         return CBLoss(label_weights=label_weights)
-    elif config["params"]["LOSS_FN"] == "BatchWeightedBCE":
+    if config["params"]["LOSS_FN"] == "BatchWeightedBCE":
         return BatchWeightedBCE()
-    elif config["params"]["LOSS_FN"] == "FocalLoss":
+    if config["params"]["LOSS_FN"] == "FocalLoss":
         return FocalLoss(
             gamma=config["params"]["FOCAL_LOSS_GAMMA"],
             alpha=config["params"]["FOCAL_LOSS_ALPHA"],
             label_smoothing=config["params"]["LABEL_SMOOTHING"],
         )
-    elif config["params"]["LOSS_FN"] == "RGDBCE":
+    if config["params"]["LOSS_FN"] == "RGDBCE":
         return RGDBCE(temperature=config["params"]["RGDBCE_TEMP"])
-    elif config["params"]["LOSS_FN"] == "SupCon":
+    if config["params"]["LOSS_FN"] == "SupCon":
         return SupCon(temperature=config["params"]["SUPCON_TEMP"])
-    else:
-        raise ValueError(f"Unknown loss function {config['params']['LOSS_FN']}")
+    raise ValueError(f"Unknown loss function {config['params']['LOSS_FN']}")

@@ -1,20 +1,20 @@
-import torch
-import os
 import argparse
 import logging
-from tqdm import tqdm
-import numpy as np
+import os
+
 import pandas as pd
-from transformers import AutoTokenizer, AutoModel
-from protnote.utils.models import generate_label_embeddings_from_text
-from protnote.utils.configs import generate_label_embedding_path
+import torch
+from tqdm import tqdm
+from transformers import AutoModel, AutoTokenizer
+
+from protnote.utils.configs import generate_label_embedding_path, get_project_root
 from protnote.utils.data import (
-    read_yaml,
-    read_pickle,
-    remove_obsolete_from_string,
     ensure_list,
+    read_pickle,
+    read_yaml,
+    remove_obsolete_from_string,
 )
-from protnote.utils.configs import get_project_root
+from protnote.utils.models import generate_label_embeddings_from_text
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,7 +24,9 @@ torch.cuda.empty_cache()
 
 def main():
     # ---------------------- HANDLE ARGUMENTS ----------------------#
-    parser = argparse.ArgumentParser(description="Train and/or Test the ProtNote model.")
+    parser = argparse.ArgumentParser(
+        description="Train and/or Test the ProtNote model.",
+    )
 
     parser.add_argument(
         "--pooling-method",
@@ -70,7 +72,7 @@ def main():
 
     args = parser.parse_args()
 
-    ROOT_PATH =  get_project_root()
+    ROOT_PATH = get_project_root()
     CONFIG = read_yaml(ROOT_PATH / "configs" / "base_config.yaml")
     TASK = "Identify the main categories, themes, or topics described in the following Gene Ontology (GO) term, which is used to detail a protein's function"
 
@@ -88,7 +90,7 @@ def main():
             ],
         ),
     )
-    #Create output path dir if it doesn't exist
+    # Create output path dir if it doesn't exist
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
     INDEX_OUTPUT_PATH = OUTPUT_PATH.split(".")
@@ -97,12 +99,13 @@ def main():
     )
 
     ANNOTATIONS_PATH = os.path.join(
-        DATA_PATH, CONFIG["paths"]["data_paths"][args.annotations_path_name]
+        DATA_PATH,
+        CONFIG["paths"]["data_paths"][args.annotations_path_name],
     )
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     logging.info(
-        f"Pooled embeddings will be saved to {OUTPUT_PATH}\n Pooled embeddings index will be saved to {INDEX_OUTPUT_PATH} \n Using pooling method: {args.pooling_method}"
+        f"Pooled embeddings will be saved to {OUTPUT_PATH}\n Pooled embeddings index will be saved to {INDEX_OUTPUT_PATH} \n Using pooling method: {args.pooling_method}",
     )
 
     descriptions_file = read_pickle(ANNOTATIONS_PATH)
@@ -117,7 +120,7 @@ def main():
     ).to(DEVICE)
 
     logging.info(
-        "Flattening descriptions for batch processing and calculating sequence token lengths..."
+        "Flattening descriptions for batch processing and calculating sequence token lengths...",
     )
     print("SOS = ", args.account_for_sos, args.account_for_sos == False)
     embeddings_idx = {
@@ -141,7 +144,7 @@ def main():
                 embeddings_idx["id"].append(go_term)
                 embeddings_idx["description_type"].append(desription_type)
                 embeddings_idx["token_count"].append(
-                    len(label_tokenizer.tokenize(description))
+                    len(label_tokenizer.tokenize(description)),
                 )  # We need the token count for embedding normalization (longer descriptions will have more feature-rich embeddings)
     # Remove Obsolete/Deprecated texts
     logging.info("Extracting embeddings...")
@@ -167,8 +170,8 @@ def main():
 
 
 if __name__ == "__main__":
-    '''
-    Example usage: 
+    """
+    Example usage:
 
 python bin/generate_label_embeddings.py --add-instruction --account-for-sos
 python bin/generate_label_embeddings.py --label-encoder-checkpoint microsoft/biogpt --account-for-sos
@@ -179,6 +182,6 @@ python bin/generate_label_embeddings.py --base-label-embedding-path EC_BASE_LABE
 python bin/generate_label_embeddings.py --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH --annotations-path-name GO_ANNOTATIONS_PATH --add-instruction --account-for-sos
 python bin/generate_label_embeddings.py --base-label-embedding-path GO_2024_BASE_LABEL_EMBEDDING_PATH --annotations-path-name GO_ANNOTATIONS_PATH --label-encoder-checkpoint microsoft/biogpt --account-for-sos
 
-    
-    '''
+
+    """
     main()

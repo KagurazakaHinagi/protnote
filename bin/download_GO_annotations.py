@@ -1,18 +1,19 @@
-import obonet
-import pandas as pd
 import argparse
 import logging
-import re
 import os
+import re
+
 import numpy as np
+import obonet
+import pandas as pd
+
 from protnote.utils.configs import get_project_root
 
 logging.basicConfig(level=logging.INFO)
 
 
 def calculate_label(row):
-    """
-    Helper function to calculate the label for a given row.
+    """Helper function to calculate the label for a given row.
     Returns the definition of the row with any text between brackets removed.
     """
     definition = row.get("def", None)
@@ -27,7 +28,7 @@ def calculate_label(row):
 
 
 def process_synonyms(row) -> dict:
-    """extracts the synonyms of a GO Annotation
+    """Extracts the synonyms of a GO Annotation
 
     :param row: Row of GO annotation dataset
     :type row: _type_
@@ -58,22 +59,20 @@ def process_synonyms(row) -> dict:
 
 
 def main(url: str, output_file: str):
-    """
-    Download the OBO file from the specified URL and save the GO ID and label to a pickle.
-    """
+    """Download the OBO file from the specified URL and save the GO ID and label to a pickle."""
     logging.info("Downloading and processing OBO file...")
 
-    output_file = get_project_root() / 'data' / 'annotations' / output_file
-    os.makedirs(get_project_root() / 'data' / 'annotations', exist_ok=True)
+    output_file = get_project_root() / "data" / "annotations" / output_file
+    os.makedirs(get_project_root() / "data" / "annotations", exist_ok=True)
     # Load the .obo file directly from the URL into a networkx graph using obonet
-    
+
     # Download from url if latest, otherwise download file with wget and read file with obonet
     if url == "latest":
         file = "https://purl.obolibrary.org/obo/go.obo"
     else:
         # Download the file, extract the date from the url and use date as suffix for temp .obo file
         date = re.search(r"\d{4}-\d{2}-\d{2}", url).group()
-        file = get_project_root() / 'data' / 'annotations' / f"go_{date}.obo"
+        file = get_project_root() / "data" / "annotations" / f"go_{date}.obo"
         os.system(f"wget {url} -O {file}")
 
     graph = obonet.read_obo(file, ignore_obsolete=False)
@@ -108,7 +107,7 @@ if __name__ == "__main__":
     """
     # TODO: Filename can be figured out from URL
     parser = argparse.ArgumentParser(
-        description="Download OBO file and save GO ID and label to a pickle."
+        description="Download OBO file and save GO ID and label to a pickle.",
     )
     parser.add_argument(
         "--url",
@@ -117,7 +116,8 @@ if __name__ == "__main__":
         help="URL to the OBO file.",
     )
     parser.add_argument(
-        "--output-file", type=str
+        "--output-file",
+        type=str,
     )
     args = parser.parse_args()
 

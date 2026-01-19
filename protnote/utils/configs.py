@@ -1,11 +1,12 @@
-import os
-import time
 import datetime
 import logging
-from protnote.utils.data import read_yaml
+import os
 import sys
+import time
 from ast import literal_eval
 from pathlib import Path
+
+from protnote.utils.data import read_yaml
 
 
 def get_logger():
@@ -21,7 +22,7 @@ def get_logger():
 
     # Create a formatter that includes the current date and time
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Set the formatter for the console handler
@@ -67,13 +68,12 @@ def override_config(config: dict, overrides: list):
                 config["params"][key] = try_literal_eval(value)
             else:
                 raise KeyError(
-                    f"Key '{key}' not found in the 'params' section of the config."
+                    f"Key '{key}' not found in the 'params' section of the config.",
                 )
 
 
 def generate_label_embedding_path(params: dict, base_label_embedding_path: str):
-    """
-    Generates the name of the file that caches label embeddings. Needed due to different
+    """Generates the name of the file that caches label embeddings. Needed due to different
     ways of pooling embeddings, different types of go descriptions and other paramters.
     This way we can store different versions/types of label embeddings for caching
     """
@@ -96,7 +96,7 @@ def generate_label_embedding_path(params: dict, base_label_embedding_path: str):
     base_model = "_".join(
         [base_model[0]]
         + [MODEL_NAME_2_NICKNAME[params["LABEL_ENCODER_CHECKPOINT"]]]
-        + base_model[1:]
+        + base_model[1:],
     )
 
     label_embedding_path[-1] = (
@@ -162,7 +162,7 @@ def get_setup(
                 "dataset_type": "train",
                 "annotations_path": paths[annotations_path_name],
                 "vocabularies_dir": paths["VOCABULARIES_DIR"],
-            }
+            },
         ]
         if train_path_name is not None
         else []
@@ -175,7 +175,7 @@ def get_setup(
                 "dataset_type": "validation",
                 "annotations_path": paths[annotations_path_name],
                 "vocabularies_dir": paths["VOCABULARIES_DIR"],
-            }
+            },
         ]
         if val_path_name is not None
         else []
@@ -213,7 +213,6 @@ def get_setup(
             os.makedirs(log_dir)
         except FileExistsError:
             print(f"Log directory {log_dir} already exists. is_master={is_master}")
-            pass
     full_log_path = os.path.join(log_dir, f"{timestamp}_{run_name}.log")
 
     # Initialize the logger for all processes
@@ -247,7 +246,8 @@ def get_setup(
 
     # Generate embeddings
     label_embedding_path = generate_label_embedding_path(
-        params=params, base_label_embedding_path=paths[base_label_embedding_name]
+        params=params,
+        base_label_embedding_path=paths[base_label_embedding_name],
     )
 
     # Return a dictionary
@@ -267,27 +267,32 @@ def get_setup(
 
 def get_project_root():
     """Dynamically determine the project root."""
-    return Path(__file__).resolve().parent.parent.parent  # Adjust based on the folder structure
+    return (
+        Path(__file__).resolve().parent.parent.parent
+    )  # Adjust based on the folder structure
+
 
 def update_config_paths(config, project_root):
     # Prepend project_root / 'data' to all paths in the 'data' section
-    for key, value in config['paths'].get('data_paths', {}).items():
-        config['paths']['data_paths'][key] = project_root / 'data' / value
+    for key, value in config["paths"].get("data_paths", {}).items():
+        config["paths"]["data_paths"][key] = project_root / "data" / value
 
-    for key, value in config['paths'].get('output_paths', {}).items():
-        config['paths']['output_paths'][key] = project_root / 'outputs' / value
+    for key, value in config["paths"].get("output_paths", {}).items():
+        config["paths"]["output_paths"][key] = project_root / "outputs" / value
 
     return config
 
-def load_config(config_file:str = 'base_config.yaml'):
+
+def load_config(config_file: str = "base_config.yaml"):
     """Load the environment variables and YAML configuration file."""
     project_root = get_project_root()
 
     # Load the YAML configuration file from the project root
-    config_file = project_root / 'configs' / config_file
-    config = update_config_paths(read_yaml(config_file),project_root) 
+    config_file = project_root / "configs" / config_file
+    config = update_config_paths(read_yaml(config_file), project_root)
 
     return config, project_root
 
-def construct_absolute_paths(dir:str,files:list)->list:
+
+def construct_absolute_paths(dir: str, files: list) -> list:
     return [Path(dir) / file for file in files]

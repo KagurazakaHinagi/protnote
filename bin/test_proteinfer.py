@@ -1,20 +1,21 @@
-from protnote.data.datasets import ProteinDataset, create_multiple_loaders
-from protnote.utils.configs import get_setup
-from protnote.models.protein_encoders import ProteInfer
-from protnote.utils.evaluation import EvalMetrics, save_evaluation_results
-from protnote.utils.data import read_json
-import torch
-import numpy as np
-from tqdm import tqdm
 import argparse
 import os
 import re
 from collections import defaultdict
-from protnote.utils.losses import FocalLoss
-from torcheval.metrics import MultilabelAUPRC, BinaryAUPRC
+
+import numpy as np
+import torch
 from torch.cuda.amp import autocast
-from protnote.utils.data import generate_vocabularies
-from protnote.utils.configs import get_project_root
+from torcheval.metrics import BinaryAUPRC, MultilabelAUPRC
+from tqdm import tqdm
+
+from protnote.data.datasets import ProteinDataset, create_multiple_loaders
+from protnote.models.protein_encoders import ProteInfer
+from protnote.utils.configs import get_project_root, get_setup
+from protnote.utils.data import generate_vocabularies, read_json
+from protnote.utils.evaluation import EvalMetrics, save_evaluation_results
+from protnote.utils.losses import FocalLoss
+
 # Load the configuration and project root
 project_root = get_project_root()
 
@@ -50,7 +51,7 @@ parser.add_argument(
 parser.add_argument(
     "--threshold",
     type=float,
-    default=0.5
+    default=0.5,
 )
 
 parser.add_argument(
@@ -70,7 +71,7 @@ parser.add_argument(
 parser.add_argument(
     "--override",
     nargs="*",
-    help="Override config parameters in key-value pairs."
+    help="Override config parameters in key-value pairs.",
 )
 
 parser.add_argument(
@@ -128,7 +129,7 @@ else:
 
 task = args.annotations_path_name.split("_")[0]
 config = get_setup(
-    config_path=project_root / 'configs' / 'base_config.yaml',
+    config_path=project_root / "configs" / "base_config.yaml",
     run_name=args.name,
     train_path_name=args.train_path_name,
     val_path_name=args.validation_path_name,
@@ -210,13 +211,18 @@ logger.info(f"################## {timestamp} RUNNING train.py ##################
 
 # Define data loaders
 loaders = create_multiple_loaders(
-    datasets=datasets, params=params, num_workers=params["NUM_WORKERS"], pin_memory=True
+    datasets=datasets,
+    params=params,
+    num_workers=params["NUM_WORKERS"],
+    pin_memory=True,
 )
 
 model_weights = paths[f"PROTEINFER_{args.proteinfer_weights}_WEIGHTS_PATH"]
 if args.model_weights_id is not None:
-    model_weights = re.sub(r'(\d+)\.pkl$', str(args.model_weights_id) + '.pkl', model_weights)
-    
+    model_weights = re.sub(
+        r"(\d+)\.pkl$", str(args.model_weights_id) + ".pkl", model_weights,
+    )
+
 
 model = ProteInfer.from_pretrained(
     weights_path=model_weights,
@@ -250,7 +256,7 @@ full_data_path = (
     "FULL_DATA_PATH" if args.proteinfer_weights == "GO" else "FULL_EC_DATA_PATH"
 )
 PROTEINFER_VOCABULARY = generate_vocabularies(
-    file_path=config["paths"][full_data_path]
+    file_path=config["paths"][full_data_path],
 )["label_vocab"]
 
 for loader_name, loader in loaders.items():
@@ -297,7 +303,10 @@ for loader_name, loader in loaders.items():
                 batch["label_embeddings"],
             )
             sequence_onehots, sequence_lengths, label_multihots = to_device(
-                device, sequence_onehots, sequence_lengths, label_multihots
+                device,
+                sequence_onehots,
+                sequence_lengths,
+                label_multihots,
             )
 
             logits = model(sequence_onehots, sequence_lengths)
@@ -311,7 +320,8 @@ for loader_name, loader in loaders.items():
 
                 if loader_name in ["validation", "test"]:
                     mAP_micro.update(
-                        probabilities.cpu().flatten(), label_multihots.cpu().flatten()
+                        probabilities.cpu().flatten(),
+                        label_multihots.cpu().flatten(),
                     )
                     mAP_macro.update(probabilities.cpu(), label_multihots.cpu())
 
@@ -330,7 +340,10 @@ for loader_name, loader in loaders.items():
 
             if loader_name in ["validation", "test"]:
                 test_metrics.update(
-                    {"map_micro": mAP_micro.compute(), "map_macro": mAP_macro.compute()}
+                    {
+                        "map_micro": mAP_micro.compute(),
+                        "map_macro": mAP_macro.compute(),
+                    },
                 )
 
         print("\n\n", "=" * 20)
@@ -342,7 +355,7 @@ for loader_name, loader in loaders.items():
             for key in test_results.keys():
                 if key == "sequence_ids":
                     test_results[key] = np.array(
-                        [j for i in test_results["sequence_ids"] for j in i]
+                        [j for i in test_results["sequence_ids"] for j in i],
                     )
                 else:
                     test_results[key] = torch.cat(test_results[key]).numpy()
@@ -350,9 +363,12 @@ for loader_name, loader in loaders.items():
             save_evaluation_results(
                 results=test_results,
                 label_vocabulary=loader[0].dataset.label_vocabulary,
-                run_name=f"{task}_{args.name}" + (str(args.model_weights_id)
-                if args.model_weights_id is not None
-                else ""),
+                run_name=f"{task}_{args.name}"
+                + (
+                    str(args.model_weights_id)
+                    if args.model_weights_id is not None
+                    else ""
+                ),
                 output_dir=config["paths"]["RESULTS_DIR"],
                 data_split_name=loader_name,
                 save_as_h5=True,

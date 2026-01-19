@@ -1,9 +1,11 @@
-import torch.nn as nn
-import torch.nn.functional as F
-import torch
-from protnote.utils.models import get_label_embeddings
-from torchvision.ops import MLP
 import math
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+from torchvision.ops import MLP
+
+from protnote.utils.models import get_label_embeddings
 
 
 class ProtNote(nn.Module):
@@ -118,7 +120,9 @@ class ProtNote(nn.Module):
         joint_embeddings = torch.cat(
             [
                 P_e[:, None, :].expand(
-                    num_sequences, num_labels, sequence_embedding_dim
+                    num_sequences,
+                    num_labels,
+                    sequence_embedding_dim,
                 ),
                 L_e[None, :, :].expand(num_sequences, num_labels, label_embedding_dim),
             ],
@@ -156,7 +160,8 @@ class ProtNote(nn.Module):
 
         # Masked scored for softmax
         raw_attn_scores = raw_attn_scores.masked_fill(
-            attention_mask == 0, float("-inf")
+            attention_mask == 0,
+            float("-inf"),
         )
 
         # Normalized attention weights
@@ -175,17 +180,17 @@ class ProtNote(nn.Module):
         label_token_counts=None,
         save_embeddings=False,
     ):
-        """
-        Forward pass of the model.
+        """Forward pass of the model.
         Returns a representation of the similarity between each sequence and each label.
-        args:
+
+        Args:
             sequence_onehots (optional): Tensor of one-hot encoded protein sequences.
             sequence_embeddings (optional): Tensor of pre-trained sequence embeddings.
             sequence_lengths (optional): Tensor of sequence lengths.
             tokenized_labels (optional): List of tokenized label sequences.
             label_embeddings (optional): Tensor of pre-trained label embeddings.
-        """
 
+        """
         # TODO: Remove sequence_embeddings and tokenized_labels from this code. They are not used. We always use the label_embeddings and sequence_onehots.
 
         # ---------------------- LABEL EMBEDDING ----------------------#
@@ -225,7 +230,9 @@ class ProtNote(nn.Module):
             # L is the sequence length, d is the embedding dimension, and α is a tunable parameter
             # denominator = torch.sqrt(label_token_counts * L_f.shape[1])
             denominator = torch.tensor(
-                math.sqrt(L_f.shape[1]), device=L_f.device, dtype=L_f.dtype
+                math.sqrt(L_f.shape[1]),
+                device=L_f.device,
+                dtype=L_f.dtype,
             )
             scalars = self.label_embedding_noising_alpha / denominator
 
@@ -250,17 +257,19 @@ class ProtNote(nn.Module):
             if self.train_sequence_encoder and self.training:
                 # Compute embeddings with gradient calculations enabled
                 P_f = self.sequence_encoder.get_embeddings(
-                    sequence_onehots, sequence_lengths
+                    sequence_onehots,
+                    sequence_lengths,
                 )
             else:
                 # Compute embeddings with gradient calculations disabled
                 with torch.no_grad():
                     P_f = self.sequence_encoder.get_embeddings(
-                        sequence_onehots, sequence_lengths
+                        sequence_onehots,
+                        sequence_lengths,
                     )
         else:
             raise ValueError(
-                "Incompatible sequence parameters passed to forward method."
+                "Incompatible sequence parameters passed to forward method.",
             )
 
         if self.label_embedding_pooling_method == "all":
@@ -285,7 +294,10 @@ class ProtNote(nn.Module):
 
         elif self.feature_fusion.startswith("concatenation"):
             joint_embeddings = self._get_joint_embeddings(
-                P_e, L_e, num_sequences, num_labels
+                P_e,
+                L_e,
+                num_sequences,
+                num_labels,
             )
             # Feed through MLP to get logits
 
@@ -327,9 +339,9 @@ class ProtNote(nn.Module):
             if joint_embeddings is not None:
                 embeddings["joint_embeddings"] = joint_embeddings.detach().cpu()
             if output_layer_embeddings is not None:
-                embeddings[
-                    "output_layer_embeddings"
-                ] = output_layer_embeddings.detach().cpu()
+                embeddings["output_layer_embeddings"] = (
+                    output_layer_embeddings.detach().cpu()
+                )
 
         return logits, embeddings
 
@@ -343,9 +355,7 @@ def get_mlp(
     batch_norm=False,
     output_neuron_bias=None,
 ):
-    """
-    Creates a variable length MLP with ReLU activations.
-    """
+    """Creates a variable length MLP with ReLU activations."""
     layers = []
 
     if input_dropout > 0:
@@ -358,7 +368,7 @@ def get_mlp(
             layers.append(nn.Linear(input_dim, hidden_dim, bias=add_hidden_layers_bias))
         else:
             layers.append(
-                nn.Linear(hidden_dim, hidden_dim, bias=add_hidden_layers_bias)
+                nn.Linear(hidden_dim, hidden_dim, bias=add_hidden_layers_bias),
             )
 
         if batch_norm:

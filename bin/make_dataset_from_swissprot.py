@@ -1,17 +1,27 @@
 import argparse
+import collections
+import os
+from typing import Literal
+
 import pandas as pd
-from Bio import SwissProt
+from Bio import SeqIO, SwissProt
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio import SeqIO
-import os
 from tqdm import tqdm
-from typing import Literal
-import collections
-from protnote.utils.configs import get_project_root,construct_absolute_paths, load_config, get_logger
-from protnote.utils.data import read_json, read_fasta, generate_vocabularies, COMMON_AMINOACIDS
+
+from protnote.utils.configs import (
+    get_logger,
+    load_config,
+)
+from protnote.utils.data import (
+    COMMON_AMINOACIDS,
+    generate_vocabularies,
+    read_fasta,
+    read_json,
+)
 
 logger = get_logger()
+
 
 def reverse_map(applicable_label_dict, label_vocab=None):
     """Flip parenthood dict to map parents to children.
@@ -29,6 +39,7 @@ def reverse_map(applicable_label_dict, label_vocab=None):
       keys may not imply themselves.
 
       DIRECTLY TAKEN FROM PROTEINFER SORUCE CODE
+
     """
     # This is technically the entire transitive closure, so it is safe for DAGs
     # (e.g. GO labels).
@@ -48,20 +59,20 @@ def main(
     output_file_path: str,
     parenthood_file: str,
     label_vocabulary: Literal["proteinfer", "new", "all"],
-    sequence_vocabulary: Literal["proteinfer_test", "proteinfer_test", "new", "all"],
+    sequence_vocabulary: Literal["proteinfer_test", "new", "all"],
     only_leaf_nodes: bool = False,
     cache=True,
 ):
     # Load the configuration and project root
-    
+
     # Load the configuration and project root
     config, project_root = load_config()
     results_dir = config["paths"]["output_paths"]["RESULTS_DIR"]
-    swissprot_dir = project_root / 'data' / 'swissprot'
-    annotations_dir = project_root / 'data' / 'annotations'
+    swissprot_dir = project_root / "data" / "swissprot"
+    annotations_dir = project_root / "data" / "annotations"
     latest_swissprot_file = swissprot_dir / latest_swissprot_file
-    
-    #Create the output directory from output_file_path if it does not exist
+
+    # Create the output directory from output_file_path if it does not exist
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
 
     # Extract data from SwissProt records
@@ -69,12 +80,14 @@ def main(
     # See https://biopython.org/docs/1.75/api/Bio.SwissProt.html and https://web.expasy.org/docs/userman.html
 
     if not (os.path.exists(swissprot_dir / args.parsed_latest_swissprot_file) & cache):
-        with open(latest_swissprot_file, "r") as f:
+        with open(latest_swissprot_file) as f:
             data = []
 
             records = SwissProt.parse(f)
 
-            logger.info("Extracting data from SwissProt records... This may take a while...")
+            logger.info(
+                "Extracting data from SwissProt records... This may take a while...",
+            )
             for record in tqdm(records, total=571609):
                 # Extract sequence ID
                 seq_id = record.accessions[0]
@@ -115,7 +128,7 @@ def main(
                         organism_classification,
                         organelle,
                         cc,
-                    ]
+                    ],
                 )
 
         logger.info("Finished extracting data from SwissProt records.")
@@ -135,7 +148,7 @@ def main(
             ],
         )
         df_latest["subcellular_location"] = df_latest.cc.apply(
-            lambda x: x.get("SUBCELLULAR LOCATION")
+            lambda x: x.get("SUBCELLULAR LOCATION"),
         )
 
         # Save df_latest to a file
@@ -144,11 +157,15 @@ def main(
         df_latest = pd.read_pickle(swissprot_dir / args.parsed_latest_swissprot_file)
 
     # Make a set of the GO labels from the label embeddings
-    label_ids_2019 = set(pd.read_pickle(annotations_dir / "go_annotations_2019_07_01.pkl").index)
-    annotations_latest = pd.read_pickle(annotations_dir / args.latest_go_annotations_file)
-    pinf_train = read_fasta(config['paths']['data_paths']['TRAIN_DATA_PATH'])
-    pinf_val = read_fasta(config['paths']['data_paths']['VAL_DATA_PATH'])
-    pinf_test = read_fasta(config['paths']['data_paths']['TEST_DATA_PATH'])
+    label_ids_2019 = set(
+        pd.read_pickle(annotations_dir / "go_annotations_2019_07_01.pkl").index,
+    )
+    annotations_latest = pd.read_pickle(
+        annotations_dir / args.latest_go_annotations_file,
+    )
+    pinf_train = read_fasta(config["paths"]["data_paths"]["TRAIN_DATA_PATH"])
+    pinf_val = read_fasta(config["paths"]["data_paths"]["VAL_DATA_PATH"])
+    pinf_test = read_fasta(config["paths"]["data_paths"]["TEST_DATA_PATH"])
 
     label_ids_2024 = set(annotations_latest.index)
 
@@ -174,7 +191,7 @@ def main(
         all_terms = set()
         for term in go_terms:
             all_terms.update(
-                parenthood[term]
+                parenthood[term],
             )  # Note that parents of term contain term itself
         return list(all_terms)
 
@@ -183,18 +200,20 @@ def main(
 
     if sequence_vocabulary == "new":
         sequence_ids_2019 = set([id for _, id, _ in pinf_train + pinf_val])
-        in_proteinfer_train_val = df_latest.seq_id.apply(lambda x: x in sequence_ids_2019)
+        in_proteinfer_train_val = df_latest.seq_id.apply(
+            lambda x: x in sequence_ids_2019,
+        )
         df_latest = df_latest[(in_proteinfer_train_val == False)]
     elif sequence_vocabulary == "proteinfer_test":
         proteinfer_test_set_seqs = set([id for _, id, _ in pinf_test])
         in_proteinfer_test = df_latest.seq_id.apply(
-            lambda x: x in proteinfer_test_set_seqs
+            lambda x: x in proteinfer_test_set_seqs,
         )
         df_latest = df_latest[(in_proteinfer_test == True)]
     elif sequence_vocabulary == "proteinfer_train":
         proteinfer_train_set_seqs = set([id for _, id, _ in pinf_train])
         in_proteinfer_train = df_latest.seq_id.apply(
-            lambda x: x in proteinfer_train_set_seqs
+            lambda x: x in proteinfer_train_set_seqs,
         )
         df_latest = df_latest[(in_proteinfer_train == True)]
     elif sequence_vocabulary == "all":
@@ -205,8 +224,8 @@ def main(
     if label_vocabulary == "proteinfer":
         vocab = set(
             generate_vocabularies(
-                str(config['paths']['data_paths']['FULL_DATA_PATH'])
-            )["label_vocab"]
+                str(config["paths"]["data_paths"]["FULL_DATA_PATH"]),
+            )["label_vocab"],
         )
     elif label_vocabulary == "new":
         vocab = new_go_labels
@@ -230,7 +249,7 @@ def main(
 
     # Create a column of the non-common amino acids
     filtered_df["non_common_amino_acids"] = filtered_df.sequence.apply(
-        lambda x: set(x) - common_amino_acids
+        lambda x: set(x) - common_amino_acids,
     )
 
     # Filter to only contain rows that contain common amino acids and rename
@@ -241,14 +260,16 @@ def main(
     logger.info(
         "Number of sequences in dataframe: "
         + str(len(SwissProt_latest))
-        + f" Number of labels in dataframe: {str(len(final_labels))}"
+        + f" Number of labels in dataframe: {len(final_labels)!s}",
     )
 
     logger.info("Writting to FASTA...")
     # Convert dataframe to FASTA format and save to a file
     records = [
         SeqRecord(
-            Seq(row["sequence"]), id=row["seq_id"], description=" ".join(row["go_ids"])
+            Seq(row["sequence"]),
+            id=row["seq_id"],
+            description=" ".join(row["go_ids"]),
         )
         for _, row in SwissProt_latest.iterrows()
     ]
@@ -263,12 +284,12 @@ if __name__ == "__main__":
     # updated test set: python make_dataset_from_swissprot.py --latest-swissprot-file uniprot_sprot.dat --output-file-path test_jul_2024.fasta --only-unseen-seqs --label-vocabulary=new --parenthood-file parenthood_jul_2024.json
     """
     parser = argparse.ArgumentParser(
-        description="Process SwissProt data and generate a FASTA file."
+        description="Process SwissProt data and generate a FASTA file.",
     )
     parser.add_argument(
         "--latest-swissprot-file",
         type=str,
-        help="Path to the SwissProt data file."
+        help="Path to the SwissProt data file.",
     )
     parser.add_argument(
         "--output-file-path",
@@ -279,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--parsed-latest-swissprot-file",
         type=str,
-        default='swissprot_2024_full.pkl',
+        default="swissprot_2024_full.pkl",
         help="Path to the latest parsed SwissProt file if exists. Otherwise will be created for caching purposes. Date should match latest-go-annotations-file",
     )
 
@@ -287,7 +308,7 @@ if __name__ == "__main__":
         "--latest-go-annotations-file",
         type=str,
         default="go_annotations_jul_2024.pkl",
-        help="Path to the latest go annotations file available. Date should match parsed-latest-swissprot-file"
+        help="Path to the latest go annotations file available. Date should match parsed-latest-swissprot-file",
     )
 
     parser.add_argument(

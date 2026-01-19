@@ -1,50 +1,50 @@
-from Bio import SeqIO
-import json
-import pickle
-from collections import defaultdict
+import contextlib
 import gzip
-import os
-import torch
-import yaml
-import random
-import numpy as np
-import wget
 import hashlib
+import json
 import math
+import os
+import pickle
+import random
 import re
-from Bio.ExPASy import Enzyme
+from collections import defaultdict
+from typing import Literal
+
 import blosum as bl
-from typing import Union, List, Set, Literal
+import numpy as np
+import torch
 import transformers
+import wget
+import yaml
+from Bio import SeqIO
+from Bio.ExPASy import Enzyme
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
-import contextlib
 from joblib import parallel
-
+from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
 COMMON_AMINOACIDS = [
-                    "A",
-                    "C",
-                    "D",
-                    "E",
-                    "F",
-                    "G",
-                    "H",
-                    "I",
-                    "K",
-                    "L",
-                    "M",
-                    "N",
-                    "P",
-                    "Q",
-                    "R",
-                    "S",
-                    "T",
-                    "V",
-                    "W",
-                    "Y",
-                ]
+    "A",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "K",
+    "L",
+    "M",
+    "N",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "V",
+    "W",
+    "Y",
+]
 
 
 def log_gpu_memory_usage(logger, device_id):
@@ -63,8 +63,8 @@ def log_gpu_memory_usage(logger, device_id):
 
     # Log memory usage information
     logger.info(
-        f"GPU memory occupied: {used_memory // 1024 ** 2} MB ({memory_percent:.2f}% of total memory {total_memory // 1024 ** 2} MB). "
-        f"Device {device_id} [Name: {torch.cuda.get_device_name(device_id)}]"
+        f"GPU memory occupied: {used_memory // 1024**2} MB ({memory_percent:.2f}% of total memory {total_memory // 1024**2} MB). "
+        f"Device {device_id} [Name: {torch.cuda.get_device_name(device_id)}]",
     )
 
 
@@ -79,9 +79,7 @@ def hash_alphanumeric_sequence_id(s: str):
 
 
 def read_fasta(data_path: str, sep=" "):
-    """
-    Reads a FASTA file and returns a list of tuples containing sequences, ids, and labels.
-    """
+    """Reads a FASTA file and returns a list of tuples containing sequences, ids, and labels."""
     sequences_with_ids_and_labels = []
 
     for record in SeqIO.parse(data_path, "fasta"):
@@ -97,13 +95,13 @@ def read_fasta(data_path: str, sep=" "):
 
 
 def read_yaml(data_path: str):
-    with open(data_path, "r") as file:
+    with open(data_path) as file:
         data = yaml.safe_load(file)
     return data
 
 
 def read_json(data_path: str):
-    with open(data_path, "r") as file:
+    with open(data_path) as file:
         data = json.load(file)
     return data
 
@@ -121,8 +119,7 @@ def get_vocab_mappings(vocabulary):
 
 
 def generate_vocabularies(file_path: str = None, data: list = None) -> dict:
-    """
-    Generate vocabularies based on the provided data path.
+    """Generate vocabularies based on the provided data path.
     path must be .fasta file
     """
     if not ((file_path is None) ^ (data is None)):
@@ -137,7 +134,7 @@ def generate_vocabularies(file_path: str = None, data: list = None) -> dict:
             data = read_fasta(file_path)
         else:
             raise TypeError(
-                "File not supported, vocabularies can only be generated from .fasta files."
+                "File not supported, vocabularies can only be generated from .fasta files.",
             )
 
     for sequence, sequence_id, labels in data:
@@ -145,7 +142,7 @@ def generate_vocabularies(file_path: str = None, data: list = None) -> dict:
         vocabs["label_vocab"].update(labels)
         vocabs["amino_acid_vocab"].update(list(sequence))
 
-    for vocab_type in vocabs.keys():
+    for vocab_type in vocabs:
         vocabs[vocab_type] = sorted(list(vocabs[vocab_type]))
 
     return vocabs
@@ -157,8 +154,7 @@ def save_to_pickle(item, file_path: str):
 
 
 def save_to_fasta(sequence_id_labels_tuples, output_file):
-    """
-    Save a list of tuples in the form (sequence, [labels]) to a FASTA file.
+    """Save a list of tuples in the form (sequence, [labels]) to a FASTA file.
 
     :param sequence_label_tuples: List of tuples containing sequences and labels
     :param output_file: Path to the output FASTA file
@@ -188,24 +184,22 @@ def read_pickle(file_path: str):
 
 
 def download_and_unzip(url, output_file):
-    """
-    Download a file from a given link and unzip it.
+    """Download a file from a given link and unzip it.
 
     Args:
         link (str): The URL to download the file from.
         filename (str): The absolute path to save the downloaded file.
-    """
 
+    """
     # Download the file from the web
-    zip_name = wget.download(url,out=os.path.dirname(output_file))
+    zip_name = wget.download(url, out=os.path.dirname(output_file))
 
     # Unzip the downloaded file
-    with gzip.open(zip_name, "rb") as f_in:
-        with open(output_file, "wb") as f_out:
-            f_out.write(f_in.read())
+    with gzip.open(zip_name, "rb") as f_in, open(output_file, "wb") as f_out:
+        f_out.write(f_in.read())
 
     print(
-        f"File {output_file + '.gz'} has been downloaded and unzipped to {output_file}."
+        f"File {output_file + '.gz'} has been downloaded and unzipped to {output_file}.",
     )
 
 
@@ -220,9 +214,8 @@ def seed_everything(seed: int, device: str):
 
 
 def load_gz_json(path):
-    with open(path, "rb") as f:
-        with gzip.GzipFile(fileobj=f, mode="rb") as gzip_file:
-            return json.load(gzip_file)
+    with open(path, "rb") as f, gzip.GzipFile(fileobj=f, mode="rb") as gzip_file:
+        return json.load(gzip_file)
 
 
 def ensure_list(value):
@@ -230,11 +223,10 @@ def ensure_list(value):
     if isinstance(value, list):
         return value
     # Case 2: If the value is NaN
-    elif value is math.nan or (isinstance(value, float) and math.isnan(value)):
+    if value is math.nan or (isinstance(value, float) and math.isnan(value)):
         return []
     # Case 3: For all other cases (including strings)
-    else:
-        return [value]
+    return [value]
 
 
 def remove_obsolete_from_string(text):
@@ -243,7 +235,7 @@ def remove_obsolete_from_string(text):
 
 
 class Blossum62Mutations:
-    def __init__(self, amino_acid_vocabulary: Union[Set, List] = None):
+    def __init__(self, amino_acid_vocabulary: set | list = None):
         if amino_acid_vocabulary is None:
             self.amino_acid_vocabulary = set(COMMON_AMINOACIDS)
         else:
@@ -294,7 +286,9 @@ class Blossum62Mutations:
         corrupted = ""
         for aa in sequence:
             corrupted += self.corrupt_amino_acid(
-                amino_acid=aa, mutation_type=mutation_type, sample=sample
+                amino_acid=aa,
+                mutation_type=mutation_type,
+                sample=sample,
             )
         return corrupted
 
@@ -306,10 +300,10 @@ class Blossum62Mutations:
     ):
         if sample:
             return self.sample_aa(amino_acid=amino_acid, mutation_type=mutation_type)
-        else:
-            return self.get_most_extreme_mutation(
-                amino_acid=amino_acid, mutation_type=mutation_type
-            )
+        return self.get_most_extreme_mutation(
+            amino_acid=amino_acid,
+            mutation_type=mutation_type,
+        )
 
     def corrupt_sequence_at_locations(
         self,
@@ -322,7 +316,9 @@ class Blossum62Mutations:
         for loc, aa in enumerate(sequence):
             if loc in locations:
                 corrupted += self.corrupt_amino_acid(
-                    amino_acid=aa, mutation_type=mutation_type, sample=sample
+                    amino_acid=aa,
+                    mutation_type=mutation_type,
+                    sample=sample,
                 )
             else:
                 corrupted += aa
@@ -333,14 +329,15 @@ class Blossum62Mutations:
         amino_acid: str,
         mutation_type: Literal["conservative", "non-conservative"],
     ) -> str:
-        """
-        Sample an amino acid based on the BLOSUM62 substitution matrix, favoring mutations based on mutation_type selected.
+        """Sample an amino acid based on the BLOSUM62 substitution matrix, favoring mutations based on mutation_type selected.
+
         Args:
             amino_acid (str): The amino acid to find a substitution for.
+
         Returns:
             str: The substituted amino acid.
-        """
 
+        """
         amino_acids, scores = self.get_aa_scores(amino_acid=amino_acid)
         multiplier = -1 if mutation_type == "non-conservative" else 1
         # Use only non-negative scores
@@ -350,14 +347,13 @@ class Blossum62Mutations:
         # If all scores are negative, do not change the amino acid
         if total == 0:
             return amino_acid
-        else:
-            # Normalize the scores to sum to 1 and sample from the distribution
-            probabilities = [p / total for p in probabilities]
-            return random.choices(amino_acids, weights=probabilities, k=1)[0]
+        # Normalize the scores to sum to 1 and sample from the distribution
+        probabilities = [p / total for p in probabilities]
+        return random.choices(amino_acids, weights=probabilities, k=1)[0]
 
 
 def ec_number_to_code(ec_number: str, depth: int = 3) -> tuple:
-    ec_code = [int(i) for i in re.findall("\d+", ec_number.strip())[:depth]]
+    ec_code = [int(i) for i in re.findall(r"\d+", ec_number.strip())[:depth]]
     return tuple(ec_code + [0] * (depth - len(ec_code)))
 
 
@@ -405,7 +401,7 @@ def get_ec_class_descriptions(enzclass_path: str) -> dict:
             }
 
     # Output the result
-    for code in ec_classes_dict.keys():
+    for code in ec_classes_dict:
         ec_classes_dict[code]["label"] = get_deep_label(code)
 
     return ec_classes_dict
@@ -445,5 +441,3 @@ def tqdm_joblib(tqdm_object):
     finally:
         parallel.BatchCompletionCallBack = old_batch_callback
         tqdm_object.close()
-
-

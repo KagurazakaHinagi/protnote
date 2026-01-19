@@ -1,12 +1,13 @@
-import pandas as pd
-from protnote.utils.evaluation import metrics_per_label_df
+from collections import Counter
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 import torch
-from protnote.utils.evaluation import EvalMetrics
+from torcheval.metrics import BinaryAUPRC, MultilabelAUPRC
+
 from protnote.utils.data import ec_number_to_code
-from torcheval.metrics import MultilabelAUPRC, BinaryAUPRC
-from collections import Counter
+from protnote.utils.evaluation import EvalMetrics, metrics_per_label_df
 
 
 def complete_blast_preds(blast_df: pd.DataFrame, labels: list, seqs: list):
@@ -33,7 +34,9 @@ def get_metrics(logits_df, labels_df, device, threshold):
 
     eval_metrics = EvalMetrics(device)
     selected_eval_metrics = eval_metrics.get_metric_collection_with_regex(
-        pattern="f1_m.*", threshold=threshold, num_labels=labels.shape[-1]
+        pattern="f1_m.*",
+        threshold=threshold,
+        num_labels=labels.shape[-1],
     )
     mAP_micro = BinaryAUPRC(device=device)
     mAP_macro = MultilabelAUPRC(device=device, num_labels=labels.shape[-1])
@@ -111,13 +114,20 @@ def metrics_by_go_ontology(df_logits, df_labels, graph, device, threshold):
         filtered_df_logits = filter_by_go_ontology(ontology, df_logits, graph)
         filtered_df_labels = filter_by_go_ontology(ontology, df_labels, graph)
         results[ontology] = get_metrics(
-            filtered_df_logits, filtered_df_labels, device=device, threshold=threshold
+            filtered_df_logits,
+            filtered_df_labels,
+            device=device,
+            threshold=threshold,
         )
     return results
 
 
 def metrics_by_ec_level_1(
-    df_logits, df_labels, ec_class_descriptions, device, threshold
+    df_logits,
+    df_labels,
+    ec_class_descriptions,
+    device,
+    threshold,
 ):
     results = {}
     ec_level_1s = [ec_class_descriptions[(i, 0, 0)]["label"] for i in range(1, 8)]
@@ -133,7 +143,10 @@ def metrics_by_ec_level_1(
             ec_class_descriptions=ec_class_descriptions,
         )
         results[ec_level_1] = get_metrics(
-            filtered_df_logits, filtered_df_labels, device=device, threshold=threshold
+            filtered_df_logits,
+            filtered_df_labels,
+            device=device,
+            threshold=threshold,
         )
     return results
 
@@ -216,7 +229,12 @@ def plot_category_performance(
 
 # Define threshold to calculate threshold-dependent metrics otherwise only threshold-agnostic metrics are calculated
 def _get_metrics_by_label_and_freq(
-    logits_df, labels_df, train_go_term_distribution, quantiles, threshold, device
+    logits_df,
+    labels_df,
+    train_go_term_distribution,
+    quantiles,
+    threshold,
+    device,
 ):
     res = metrics_per_label_df(logits_df, labels_df, device=device, threshold=threshold)
     res["Frequency"] = res.index.map(train_go_term_distribution)
@@ -237,7 +255,11 @@ def _get_metrics_by_label_and_freq(
 
 
 def get_metrics_by_label_and_freq(
-    models, train_go_term_distribution, quantiles, threshold, device
+    models,
+    train_go_term_distribution,
+    quantiles,
+    threshold,
+    device,
 ):
     res_dfs = []
     for model, data in models.items():
@@ -267,7 +289,12 @@ def get_metrics_by_label_and_freq(
 
 
 def plot_metric_by_label_freq(
-    models, train_go_term_distribution, metric, quantiles, threshold, device
+    models,
+    train_go_term_distribution,
+    metric,
+    quantiles,
+    threshold,
+    device,
 ):
     res_df, freq_bins, freq_bin_edges = get_metrics_by_label_and_freq(
         models=models,

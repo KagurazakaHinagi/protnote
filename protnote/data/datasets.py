@@ -1,25 +1,26 @@
-import torch
 import logging
 import random
-from collections import defaultdict
-from joblib import Parallel, delayed, cpu_count
+from collections import Counter, defaultdict
 from functools import partial
-from collections import Counter
-from typing import List
-import pandas as pd
-import numpy as np
+
 import blosum as bl
-from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import pandas as pd
+import torch
+from joblib import Parallel, cpu_count, delayed
+from torch.utils.data import DataLoader, Dataset
+
 from protnote.data.collators import collate_variable_sequence_length
-from protnote.utils.data import read_fasta, get_vocab_mappings, save_to_fasta
 from protnote.data.samplers import GridBatchSampler, observation_sampler_factory
-from protnote.utils.data import generate_vocabularies
+from protnote.utils.data import (
+    generate_vocabularies,
+    get_vocab_mappings,
+    read_fasta,
+)
 
 
 class ProteinDataset(Dataset):
-    """
-    Dataset class for protein sequences with GO annotations.
-    """
+    """Dataset class for protein sequences with GO annotations."""
 
     def __init__(
         self,
@@ -29,8 +30,7 @@ class ProteinDataset(Dataset):
         require_label_idxs=False,
         label_tokenizer=None,
     ):
-        """
-        data_paths (dict): Dictionary containing paths to the data and vocabularies.
+        """data_paths (dict): Dictionary containing paths to the data and vocabularies.
             data_path (str): Path to the FASTA file containing the protein sequences and corresponding GO annotations
             dataset_type (str): One of 'train', 'validation', or 'test'
             go_descriptions_path (str): Path to the pickled file containing the GO term descriptions mapped to GO term IDs
@@ -86,7 +86,7 @@ class ProteinDataset(Dataset):
         ]
         if subset_fraction < 1.0:
             logging.info(
-                f"Subsetting {subset_fraction*100}% of the {self.dataset_type} set..."
+                f"Subsetting {subset_fraction * 100}% of the {self.dataset_type} set...",
             )
             self.data = self.data[: int(subset_fraction * len(self.data))]
 
@@ -123,7 +123,8 @@ class ProteinDataset(Dataset):
             self.label_token_counts,
             self.label_descriptions,
         ) = self._process_label_embedding_mapping(
-            mapping=index_mapping, embeddings=torch.load(config["LABEL_EMBEDDING_PATH"])
+            mapping=index_mapping,
+            embeddings=torch.load(config["LABEL_EMBEDDING_PATH"]),
         )
 
         (
@@ -136,12 +137,12 @@ class ProteinDataset(Dataset):
         )
         logging.info("Total number of label embeddings: %s", len(self.label_embeddings))
         logging.info(
-            "Total number of label token counts: %s", len(self.label_token_counts)
+            "Total number of label token counts: %s",
+            len(self.label_token_counts),
         )
 
     def _preprocess_data(self, deduplicate, max_sequence_length, vocabulary_path):
-        """
-        Remove duplicate sequences from self.data, keeping only the first instance of each sequence
+        """Remove duplicate sequences from self.data, keeping only the first instance of each sequence
         Use pandas to improve performance
         """
         self.logger.info("Cleaning data...")
@@ -155,7 +156,7 @@ class ProteinDataset(Dataset):
             # Log the number of duplicate sequences removed
             num_duplicates = len(self.data) - len(df)
             logging.info(
-                f"Removing {num_duplicates} duplicate sequences from {self.data_path}..."
+                f"Removing {num_duplicates} duplicate sequences from {self.data_path}...",
             )
 
         # In train, remove sequences longer than max_sequence_length
@@ -164,7 +165,7 @@ class ProteinDataset(Dataset):
             num_long_sequences = (~seq_length_mask).sum()
             df = df[seq_length_mask]
             logging.info(
-                f"Removing {num_long_sequences} sequences longer than {max_sequence_length} from {self.data_path}..."
+                f"Removing {num_long_sequences} sequences longer than {max_sequence_length} from {self.data_path}...",
             )
 
         # Convert the DataFrame back to the list of tuples format
@@ -177,7 +178,7 @@ class ProteinDataset(Dataset):
         # If extract_vocabularies is null, generate vocab from self.data
 
         logging.info(
-            f"Extracting vocabularies for {self.dataset_type} from {vocabulary_path}"
+            f"Extracting vocabularies for {self.dataset_type} from {vocabulary_path}",
         )
         vocabularies = generate_vocabularies(data=self.data)
 
@@ -200,7 +201,7 @@ class ProteinDataset(Dataset):
 
     def _process_amino_acid_vocab(self):
         self.aminoacid2int, self.int2aminoacid = get_vocab_mappings(
-            self.amino_acid_vocabulary
+            self.amino_acid_vocabulary,
         )
 
     def _process_label_vocab(self):
@@ -208,20 +209,22 @@ class ProteinDataset(Dataset):
 
     def _process_sequence_id_vocab(self):
         self.sequence_id2int, self.int2sequence_id = get_vocab_mappings(
-            self.sequence_id_vocabulary
+            self.sequence_id_vocabulary,
         )
 
     def __len__(self) -> int:
         return len(self.data)
 
     def _sample_based_on_blosum62(self, amino_acid: str) -> str:
-        """
-        Sample an amino acid based on the BLOSUM62 substitution matrix, favoring likely silent mutations.
+        """Sample an amino acid based on the BLOSUM62 substitution matrix, favoring likely silent mutations.
         In most cases, the amino acid will be unchanged.
+
         Args:
             amino_acid (str): The amino acid to find a substitution for.
+
         Returns:
             str: The substituted amino acid.
+
         """
         # Get the substitutions for the amino acid, ensuring only amino acids within the vocabulary are considered
         substitutions = self.blosum62[amino_acid]
@@ -239,20 +242,20 @@ class ProteinDataset(Dataset):
         # If all scores are negative, do not change the amino acid
         if total == 0:
             return amino_acid
-        else:
-            # Normalize the scores to sum to 1 and sample from the distribution
-            probabilities = [p / total for p in probabilities]
-            return random.choices(amino_acids, weights=probabilities, k=1)[0]
+        # Normalize the scores to sum to 1 and sample from the distribution
+        probabilities = [p / total for p in probabilities]
+        return random.choices(amino_acids, weights=probabilities, k=1)[0]
 
     def _augment_sequence(self, sequence: str) -> str:
-        """
-        Augment the sequence by randomly masking amino acids.
+        """Augment the sequence by randomly masking amino acids.
         Each position has a probability of being augmented based on self.augment_residue_probability.
+
         Args:
             sequence (str): The amino acid sequence to augment.
 
         Returns:
             str: The augmented amino acid sequence.
+
         """
         augmented_sequence = ""
         for amino_acid in sequence:
@@ -267,10 +270,12 @@ class ProteinDataset(Dataset):
         return augmented_sequence
 
     def _process_label_embedding_mapping(
-        self, mapping: pd.DataFrame, embeddings: torch.Tensor
+        self,
+        mapping: pd.DataFrame,
+        embeddings: torch.Tensor,
     ):
         assert set(self.inference_go_descriptions).issubset(
-            set(["name", "label"])
+            set(["name", "label"]),
         ), """only supporting name, label or name+label"""
 
         self.logger.info("Processing label embeddings...")
@@ -332,7 +337,7 @@ class ProteinDataset(Dataset):
                 range(
                     self.label_embeddings_index[go_term]["min_idx"],
                     self.label_embeddings_index[go_term]["max_idx"] + 1,
-                )
+                ),
             )
 
             label_embedding_idxs_list.extend(idxs)
@@ -351,7 +356,8 @@ class ProteinDataset(Dataset):
     ) -> dict:
         # One-hot encode the labels for use in the loss function (not a model input, so should not be impacted by augmentation)
         labels_ints = torch.tensor(
-            [self.label2int[label] for label in labels], dtype=torch.long
+            [self.label2int[label] for label in labels],
+            dtype=torch.long,
         )
 
         # If training, augment the sequence with probability defined in the config
@@ -362,7 +368,8 @@ class ProteinDataset(Dataset):
 
         # Convert the sequence and labels to integers for one-hot encoding (impacted by augmentation)
         amino_acid_ints = torch.tensor(
-            [self.aminoacid2int[aa] for aa in sequence], dtype=torch.long
+            [self.aminoacid2int[aa] for aa in sequence],
+            dtype=torch.long,
         )
 
         # Get the length of the sequence
@@ -370,10 +377,12 @@ class ProteinDataset(Dataset):
 
         # Get multi-hot encoding of sequence and labels
         sequence_onehots = torch.nn.functional.one_hot(
-            amino_acid_ints, num_classes=len(self.amino_acid_vocabulary)
+            amino_acid_ints,
+            num_classes=len(self.amino_acid_vocabulary),
         ).permute(1, 0)
         label_multihots = torch.nn.functional.one_hot(
-            labels_ints, num_classes=len(self.label_vocabulary)
+            labels_ints,
+            num_classes=len(self.label_vocabulary),
         ).sum(dim=0)
 
         if label_idxs is not None:
@@ -445,7 +454,7 @@ class ProteinDataset(Dataset):
 
         num_positive_labels = sum(res[0] for res in results)
         num_negative_labels = sum(res[1] for res in results)
-        pos_weight = torch.tensor((num_negative_labels / num_positive_labels))
+        pos_weight = torch.tensor(num_negative_labels / num_positive_labels)
         self.logger.info(f"Calculated bce_pos_weight= {pos_weight.item()}")
         return pos_weight
 
@@ -464,13 +473,17 @@ class ProteinDataset(Dataset):
             self.label_frequency = label_freq
 
     def calculate_label_weights(
-        self, inv_freq=True, power=0.3, normalize=True, return_list=False
+        self,
+        inv_freq=True,
+        power=0.3,
+        normalize=True,
+        return_list=False,
     ):
         self.logger.info("Calculating label weights...")
 
-        assert (
-            self.label_frequency is not None
-        ), "Must call calculate_label_frequency first"
+        assert self.label_frequency is not None, (
+            "Must call calculate_label_frequency first"
+        )
 
         label_weights = self.label_frequency.copy()
 
@@ -499,7 +512,7 @@ class ProteinDataset(Dataset):
         if return_list:
             # Sort weights by vocabulary order
             label_weights = torch.tensor(
-                [value for _, value in sorted(label_weights.items())]
+                [value for _, value in sorted(label_weights.items())],
             ).float()
         else:
             label_weights = {self.int2label[k]: v for k, v in label_weights.items()}
@@ -508,8 +521,7 @@ class ProteinDataset(Dataset):
 
 
 def calculate_sequence_weights(data: list, label_inv_freq: dict, aggregation: str):
-    """
-    Calculate the sequence weights for weighted sampling.
+    """Calculate the sequence weights for weighted sampling.
     The sequence weights are the sum of the inverse frequencies of the labels in the sequence.
 
     :param data: _description_
@@ -521,12 +533,11 @@ def calculate_sequence_weights(data: list, label_inv_freq: dict, aggregation: st
     :return: _description_
     :rtype: _type_
     """
-
     sequence_weights = []
     for _, _, labels in data:
         labels = labels[1:]  # Assuming the first element is not a label
         sequence_weight = pd.Series(
-            [label_inv_freq.get(label, 0) for label in labels]
+            [label_inv_freq.get(label, 0) for label in labels],
         ).agg(aggregation)
         sequence_weights.append(sequence_weight)
     return sequence_weights
@@ -537,18 +548,19 @@ def set_padding_to_sentinel(
     sequence_lengths: torch.Tensor,
     sentinel: float,
 ) -> torch.Tensor:
-    """
-    Set the padding values in the input tensor to the sentinel value.
+    """Set the padding values in the input tensor to the sentinel value.
 
-    Parameters:
+    Parameters
+    ----------
         padded_representations (torch.Tensor): The input tensor of shape (batch_size, dim, max_sequence_length)
         sequence_lengths (torch.Tensor): 1D tensor containing original sequence lengths for each sequence in the batch
         sentinel (float): The value to set the padding to
 
-    Returns:
+    Returns
+    -------
         torch.Tensor: Tensor with padding values set to sentinel
-    """
 
+    """
     # Get the shape of the input tensor
     batch_size, dim, max_sequence_length = padded_representations.shape
 
@@ -557,7 +569,8 @@ def set_padding_to_sentinel(
 
     # Create a mask that identifies padding, ensuring it's on the same device
     mask = torch.arange(max_sequence_length, device=device).expand(
-        batch_size, max_sequence_length
+        batch_size,
+        max_sequence_length,
     ) >= sequence_lengths.unsqueeze(1).to(device)
 
     # Expand the mask to cover the 'dim' dimension
@@ -581,7 +594,7 @@ def create_multiple_loaders(
     world_size: int = 1,
     rank: int = 0,
     sequence_weights: torch.Tensor = None,
-) -> List[DataLoader]:
+) -> list[DataLoader]:
     loaders = defaultdict(list)
     for dataset_type, dataset_list in datasets.items():
         batch_size_for_type = params[f"{dataset_type.upper()}_BATCH_SIZE"]
@@ -607,9 +620,9 @@ def create_multiple_loaders(
                 )
 
                 if grid_sampler:
-                    assert (
-                        label_sample_size is not None
-                    ), "Provide label_sample_size when using grid sampler"
+                    assert label_sample_size is not None, (
+                        "Provide label_sample_size when using grid sampler"
+                    )
                     batch_sampler = GridBatchSampler(
                         observation_sampler=sequence_sampler,
                         observations_batch_size=batch_size_for_type,

@@ -1,7 +1,9 @@
-from protnote.utils.data import read_pickle
-import numpy as np
 import collections
+
+import numpy as np
 import torch
+
+from protnote.utils.data import read_pickle
 
 
 def transfer_tf_weights_to_torch(torch_model: torch.nn.Module, tf_weights_path: str):
@@ -15,7 +17,7 @@ def transfer_tf_weights_to_torch(torch_model: torch.nn.Module, tf_weights_path: 
         temp[tf_name] = tf_param
         if ("batch_normalization" in tf_name) & ("moving_variance" in tf_name):
             num_batches_name = "/".join(
-                tf_name.split("/")[:-1] + ["num_batches_tracked:0"]
+                tf_name.split("/")[:-1] + ["num_batches_tracked:0"],
             )
             temp[num_batches_name] = np.array(num_batches)
     tf_weights = temp
@@ -26,16 +28,18 @@ def transfer_tf_weights_to_torch(torch_model: torch.nn.Module, tf_weights_path: 
 
     with torch.no_grad():
         for (name, param), (tf_name, tf_param) in zip(
-            state_dict_list, tf_weights.items()
+            state_dict_list,
+            tf_weights.items(),
         ):
             if tf_param.ndim >= 2:
                 tf_param = np.transpose(
-                    tf_param, tuple(sorted(range(tf_param.ndim), reverse=True))
+                    tf_param,
+                    tuple(sorted(range(tf_param.ndim), reverse=True)),
                 )
 
-            assert (
-                tf_param.shape == param.detach().numpy().shape
-            ), f"{name} and {tf_name} don't have the same shape"
+            assert tf_param.shape == param.detach().numpy().shape, (
+                f"{name} and {tf_name} don't have the same shape"
+            )
             state_dict[name] = torch.from_numpy(tf_param)
 
     torch_model.load_state_dict(state_dict)
@@ -55,6 +59,7 @@ def reverse_map(applicable_label_dict, label_vocab=None):
       The defaultdict returns an empty frozenset for keys that are not found.
       This behavior is desirable for lifted clan label normalizers, where
       keys may not imply themselves.
+
     """
     # This is technically the entire transitive closure, so it is safe for DAGs
     # (e.g. GO labels).
@@ -83,6 +88,7 @@ def normalize_confidences(predictions, label_vocab, applicable_label_dict):
       A numpy array [num_sequences, num_labels] with confidences where:
       if label_vocab[k] in applicable_label_dict[label_vocab[j]],
       then arr[i, j] >= arr[i, k] for all i.
+
     """
     vocab_indices = {v: i for i, v in enumerate(label_vocab)}
     children = reverse_map(applicable_label_dict, set(vocab_indices.keys()))
