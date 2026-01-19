@@ -1,43 +1,41 @@
-import os
-import torch
 import argparse
-import os
-import sys
 import logging
-from typing import Literal
-from pprint import pprint
-from torcheval.metrics import MultilabelAUPRC, BinaryAUPRC
-import pandas as pd
+import os
 import subprocess
-from protnote.utils.evaluation import EvalMetrics
-from protnote.utils.data import generate_vocabularies, read_yaml
-from protnote.utils.configs import load_config, construct_absolute_paths
-from test_models import TEST_COMMANDS, MODEL_PATH_TOKEN, MODEL_NAME_TOKEN
+import sys
+from pprint import pprint
+from typing import Literal
 
-#TODO: This could be more general by eliminating unnecessary dependencies and passing the embedding file names as arguments
+import pandas as pd
+import torch
+from test_models import MODEL_NAME_TOKEN, MODEL_PATH_TOKEN, TEST_COMMANDS
+from torcheval.metrics import BinaryAUPRC, MultilabelAUPRC
+
+from protnote.utils.configs import construct_absolute_paths, load_config
+from protnote.utils.data import generate_vocabularies, read_yaml
+from protnote.utils.evaluation import EvalMetrics
+
+
+# TODO: This could be more general by eliminating unnecessary dependencies and passing the embedding file names as arguments
 def main(
     annotation_type: str,
-    label_embedding_model: Literal["E5", "BioGPT"],
+    label_embedding_model: Literal["E5", "BioGPT", "Qwen3"],
     test_name: str,
     model_name: str,
     cache: bool,
 ):
-    
     # Load the configuration and project root
     config, project_root = load_config()
     results_dir = config["paths"]["output_paths"]["RESULTS_DIR"]
-    full_data_path = config["paths"]['data_paths']['FULL_DATA_PATH']
+    full_data_path = config["paths"]["data_paths"]["FULL_DATA_PATH"]
     proteinfer_predictions_path = results_dir / f"test_logits_{annotation_type}_{test_name}_proteinfer.h5"
     protnote_labels_path = results_dir / f"test_1_labels_{test_name}_{model_name}.h5"
     output_file = results_dir / f"test_logits_{annotation_type}_{test_name}_{label_embedding_model}_baseline.h5"
-    
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     # Create a formatter
-    formatter = logging.Formatter(
-        fmt="%(asctime)s %(levelname)-4s %(message)s", datefmt="%Y-%m-%d %H:%M:%S %Z"
-    )
+    formatter = logging.Formatter(fmt="%(asctime)s %(levelname)-4s %(message)s", datefmt="%Y-%m-%d %H:%M:%S %Z")
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
@@ -49,6 +47,9 @@ def main(
 
     elif label_embedding_model == "BioGPT":
         label_embeddings = "2024_BioGPT_frozen_label_embeddings_mean"
+
+    elif label_embedding_model == "Qwen3":
+        label_embeddings = "2025_10_Qwen3_frozen_label_embeddings_mean"
 
     base_embeddings_path = project_root / "data" / "embeddings" / f"{label_embeddings}.pt"
     base_embeddings_idx_path = project_root / "data" / "embeddings" / f"{label_embeddings}_index.pt"
@@ -68,20 +69,17 @@ def main(
     else:
         logger.info("Found existing proteinfer predictions... caching")
 
-    if (
-        not os.path.exists(protnote_labels_path)
-    ) | (not cache):
+    if (not os.path.exists(protnote_labels_path)) | (not cache):
         logger.info("Getting label dataframe in a hacky way...")
-        #TODO: This can be avoided by creating the label dataframe and performing the preprocessing
+        # TODO: This can be avoided by creating the label dataframe and performing the preprocessing
         # instead of running the model
         subprocess.run(
-            TEST_COMMANDS[test_name]
-            .replace(MODEL_PATH_TOKEN, f"{model_name}.pt")
-            .replace(MODEL_NAME_TOKEN, model_name) + " --save-prediction-results",
+            TEST_COMMANDS[test_name].replace(MODEL_PATH_TOKEN, f"{model_name}.pt").replace(MODEL_NAME_TOKEN, model_name)
+            + " --save-prediction-results",
             shell=True,
         )
 
-    zero_shot_pinf_logits = pd.read_hdf(proteinfer_predictions_path,key="logits_df").astype("float32")
+    zero_shot_pinf_logits = pd.read_hdf(proteinfer_predictions_path, key="logits_df").astype("float32")
     zero_shot_labels = pd.read_hdf(protnote_labels_path, key="labels_df")
     vocabularies = generate_vocabularies(file_path=str(full_data_path))
     zero_shot_pinf_logits.columns = vocabularies["label_vocab"]
@@ -102,9 +100,7 @@ def main(
     if annotation_type == "GO":
         # Create embedding matrix of the new/unknown GO Term definitions
         zero_shot_embeddings_mask = embeddings_idx["id"].isin(zero_shot_labels.columns)
-        zero_shot_embeddings_idx = embeddings_idx[
-            zero_shot_embeddings_mask
-        ].reset_index(drop=True)
+        zero_shot_embeddings_idx = embeddings_idx[zero_shot_embeddings_mask].reset_index(drop=True)
         zero_shot_embeddings = embeddings[zero_shot_embeddings_mask]
 
     if annotation_type == "EC":
@@ -112,6 +108,8 @@ def main(
             label_embeddings_new = "ecv1_BioGPT_frozen_label_embeddings_mean"
         elif label_embedding_model == "E5":
             label_embeddings_new = "ecv1_E5_multiling_inst_frozen_label_embeddings_mean"
+        elif label_embedding_model == "Qwen3":
+            label_embeddings_new = "ecv1_Qwen3_frozen_label_embeddings_mean"
 
         new_embeddings_path = project_root / "data" / "embeddings" / f"{label_embeddings_new}.pt"
         new_embeddings_idx_path = project_root / "data" / "embeddings" / f"{label_embeddings_new}_index.pt"
@@ -121,53 +119,36 @@ def main(
 
         # Create embedding matrix of the new/unknown GO Term definitions
         embedding_mask_new = embeddings_idx_new["description_type"] == "name"
-        embeddings_idx_new = embeddings_idx_new[embedding_mask_new].reset_index(
-            drop=True
-        )
+        embeddings_idx_new = embeddings_idx_new[embedding_mask_new].reset_index(drop=True)
         embeddings_new = embeddings_new[embedding_mask_new]
 
-        zero_shot_embeddings_mask = embeddings_idx_new["id"].isin(
-            zero_shot_labels.columns
-        )
-        zero_shot_embeddings_idx = embeddings_idx_new[
-            zero_shot_embeddings_mask
-        ].reset_index(drop=True)
+        zero_shot_embeddings_mask = embeddings_idx_new["id"].isin(zero_shot_labels.columns)
+        zero_shot_embeddings_idx = embeddings_idx_new[zero_shot_embeddings_mask].reset_index(drop=True)
         zero_shot_embeddings = embeddings_new[zero_shot_embeddings_mask]
 
     # Create description mapping from seen to new
     label_train_2_zero_shot_similarities = (
-        torch.nn.functional.normalize(zero_shot_embeddings)
-        @ torch.nn.functional.normalize(train_embeddings).T
+        torch.nn.functional.normalize(zero_shot_embeddings) @ torch.nn.functional.normalize(train_embeddings).T
     )
     zero_shot_label_mapping = {
-        zero_shot_embeddings_idx["id"]
-        .iloc[zero_shot_label_idx]: train_embeddings_idx["id"]
-        .iloc[train_label_idx.item()]
-        for zero_shot_label_idx, train_label_idx in enumerate(
-            label_train_2_zero_shot_similarities.max(dim=-1).indices
-        )
+        zero_shot_embeddings_idx["id"].iloc[zero_shot_label_idx]: train_embeddings_idx["id"].iloc[train_label_idx.item()]
+        for zero_shot_label_idx, train_label_idx in enumerate(label_train_2_zero_shot_similarities.max(dim=-1).indices)
     }
 
     # Create baseline predictions by replicating logits of most similar labels
-    zero_shot_pinf_baseline_logits = zero_shot_pinf_logits[
-        [zero_shot_label_mapping[i] for i in zero_shot_labels.columns]
-    ]
+    zero_shot_pinf_baseline_logits = zero_shot_pinf_logits[[zero_shot_label_mapping[i] for i in zero_shot_labels.columns]]
     zero_shot_pinf_baseline_logits.columns = zero_shot_labels.columns
 
-    zero_shot_pinf_baseline_logits.to_hdf(output_file,key='logits_df')
+    zero_shot_pinf_baseline_logits.to_hdf(output_file, key="logits_df")
 
     # Evaluate performance of baseline
     eval_metrics = EvalMetrics(device="cuda")
     mAP_micro = BinaryAUPRC(device="cpu")
     mAP_macro = MultilabelAUPRC(device="cpu", num_labels=zero_shot_labels.shape[-1])
-    metrics = eval_metrics.get_metric_collection_with_regex(
-        pattern="f1_m.*", threshold=0.5, num_labels=zero_shot_labels.shape[-1]
-    )
+    metrics = eval_metrics.get_metric_collection_with_regex(pattern="f1_m.*", threshold=0.5, num_labels=zero_shot_labels.shape[-1])
 
     metrics(
-        torch.sigmoid(
-            torch.tensor(zero_shot_pinf_baseline_logits.values, device="cuda")
-        ),
+        torch.sigmoid(torch.tensor(zero_shot_pinf_baseline_logits.values, device="cuda")),
         torch.tensor(zero_shot_labels.values, device="cuda"),
     )
     mAP_micro.update(
@@ -204,7 +185,7 @@ if __name__ == "__main__":
         "--label-embedding-model",
         type=str,
         required=True,
-        help="The name of LLM used for text embeddings: E5 or BioGPT",
+        help="The name of LLM used for text embeddings: E5 or BioGPT or Qwen3",
     )
     parser.add_argument(
         "--cache",
@@ -221,5 +202,3 @@ if __name__ == "__main__":
         label_embedding_model=args.label_embedding_model,
         cache=args.cache,
     )
-
-
