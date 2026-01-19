@@ -23,6 +23,7 @@ dependencies = [
     "biopython==1.84",
     "umap-learn==0.5.4",
     "tables==3.8.0",
+    "ruff>=0.14.13",
 ]
 
 [tool.hatch.build.targets.wheel]
