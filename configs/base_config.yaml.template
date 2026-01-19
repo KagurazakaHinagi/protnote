@@ -13,7 +13,7 @@ params:
   IN_BATCH_SAMPLING: False # Use either in batch sampling or lable samples, not both.
   WEIGHTED_SAMPLING: True #Sample rare sequences more often as dictaded by inverse frequency of labels
   INV_FREQUENCY_POWER: 0.5 #Used for weighted sampling AND relevant losses with weighting
-  SEQUENCE_WEIGHT_AGG: "sum" #The aggregation to calculate sequence weight from applicable label weights.
+  SEQUENCE_WEIGHT_AGG: 'sum' #The aggregation to calculate sequence weight from applicable label weights.
   SAMPLING_LOWER_CLAMP_BOUND: null # Lower bound for when clamping sampling weights
   SAMPLING_UPPER_CLAMP_BOUND: null # Upper bound for when clamping sampling weights
   TRAIN_LABEL_SAMPLE_SIZE: null # 15K for both. IS ALSO USED WITH GRID SAMPLER
@@ -115,12 +115,6 @@ embed_sequences_params:
 paths:
   # Paths referenced relative to DATA_PATH (will have "data" prepended)
   data_paths:
-    # Toxin data paths
-
-    TRAIN_TOXIN_DATA_PATH: swissprot/toxin_splits/random/train.fasta
-    VAL_TOXIN_DATA_PATH: swissprot/toxin_splits/random/val.fasta
-    TEST_TOXIN_DATA_PATH: swissprot/toxin_splits/random/test.fasta
-
     # ProteInfer data paths
     TRAIN_DATA_PATH: swissprot/proteinfer_splits/random/train_GO.fasta
     TRAIN_2024_DATA_PATH: swissprot/proteinfer_splits/random/train_GO_jul_2024.fasta
@@ -144,31 +138,29 @@ paths:
     TEST_DATA_PATH_ZERO_SHOT: zero_shot/GO_swissprot_jul_2024.fasta
     TEST_DATA_PATH_ZERO_SHOT_LEAF_NODES: zero_shot/GO_swissprot_leaf_nodes_jul_2024.fasta
 
-    # Other non-GO datasets to test zero shot
+    #Other non-GO datasets to test zero shot
     VAL_EC_DATA_PATH_ZERO_SHOT: zero_shot/dev_EC.fasta
     TEST_EC_DATA_PATH_ZERO_SHOT: zero_shot/test_EC.fasta
+    FULL_EC_DATA_PATH: swissprot/proteinfer_splits/random/full_EC.fasta
 
     # Vocabulary paths
     VOCABULARIES_DIR: vocabularies/proteinfer
-    GO_ANNOTATIONS_2024_07_PATH: annotations/go_annotations_jul_2024.pkl
+    GO_ANNOTATIONS_PATH: annotations/go_annotations_jul_2024.pkl
     GO_ANNOTATIONS_2019_UPDATED_PATH: annotations/go_annotations_2019_07_01_updated.pkl
-    GO_ANNOTATIONS_2025_10_PATH: annotations/go_annotations_2025_10_10.pkl
     EC_ANNOTATIONS_PATH: annotations/ec_annotations.pkl
 
     # Embeddings paths (if using frozen pre-trained models)
     GO_BASE_LABEL_EMBEDDING_PATH: embeddings/frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
     GO_2024_BASE_LABEL_EMBEDDING_PATH: embeddings/2024_frozen_label_embeddings.pt
     EC_BASE_LABEL_EMBEDDING_PATH: embeddings/ecv1_frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
-    GO_2025_10_BASE_LABEL_EMBEDDING_PATH: embeddings/202510_frozen_label_embeddings.pt
 
     # ProteInfer paths
-    PARENTHOOD_LIB_PATH: vocabularies/parenthood_2025_10.json
+    PARENTHOOD_LIB_PATH: vocabularies/parenthood_jul_2024.json
     PROTEINFER_GO_WEIGHTS_PATH: models/proteinfer/GO_model_weights13703706.pkl
     PROTEINFER_EC_WEIGHTS_PATH: models/proteinfer/EC_model_weights13703966.pkl
 
-    # SwissProt
-    2024_07_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_jul_2024.dat
-    2025_10_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_oct_2025.dat
+    #SwissProt
+    LATEST_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_jul_2024.dat
 
   # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
   output_paths:
