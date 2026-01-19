@@ -104,6 +104,6 @@ target/
 # runs
 /runs/
 
-```# pixi environments
+# pixi environments
 .pixi/*
 !.pixi/config.toml
