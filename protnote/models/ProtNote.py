@@ -96,7 +96,7 @@ class ProtNote(nn.Module):
             # TODO: This could change. Currently keeping latent dim.
             self.output_layer = get_mlp(
                 input_dim=self._get_concatenated_features_dim(),
-                hidden_dim=int(round(output_mlp_hidden_dim_scale_factor * latent_dim)),
+                hidden_dim=round(output_mlp_hidden_dim_scale_factor * latent_dim),
                 num_layers=output_mlp_num_layers,
                 output_neuron_bias=output_neuron_bias,
                 batch_norm=outout_mlp_add_batchnorm,

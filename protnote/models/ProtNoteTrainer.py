@@ -41,17 +41,15 @@ def calculate_f1_micro(total_tp_per_label, total_fn_per_label, total_fp_per_labe
     fp_micro = total_fp_per_label.sum()
     precision_micro = tp_micro / (tp_micro + fp_micro + 1e-8)
     recall_micro = tp_micro / (tp_micro + fn_micro + 1e-8)
-    f1_micro = (
+    return (
         2 * (precision_micro * recall_micro) / (precision_micro + recall_micro + 1e-8)
     )
-    return f1_micro
 
 
 def calculate_f1(tp, fn, fp):
     precision = tp / (tp + fp + 1e-8)
     recall = tp / (tp + fn + 1e-8)
-    f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
-    return f1
+    return 2 * (precision * recall) / (precision + recall + 1e-8)
 
 
 def calculate_tp_fn_fp(probs, labels, threshold=0.5):
@@ -167,18 +165,17 @@ class ProtNoteTrainer:
             os.makedirs(self.output_model_dir)
 
         model_name = self.run_name if self.run_name else "ProtNote"
-        model_path = os.path.join(
+        return os.path.join(
             self.output_model_dir,
             f"{self.timestamp}_{model_name}",
         )
-        return model_path
 
     def _to_device(self, *args):
         processed_args = []
         for item in args:
             if isinstance(item, torch.Tensor):
                 processed_args.append(item.to(self.device))
-            elif isinstance(item, BatchEncoding) or isinstance(item, dict):
+            elif isinstance(item, (BatchEncoding, dict)):
                 processed_dict = {
                     k: v.to(self.device) if isinstance(v, torch.Tensor) else v
                     for k, v in item.items()
@@ -210,7 +207,7 @@ class ProtNoteTrainer:
             ):
                 param.requires_grad = False
 
-            if (name.startswith("W_p.weight") or name.startswith("W_l.weight")) and (
+            if (name.startswith(("W_p.weight", "W_l.weight"))) and (
                 not self.train_projection_head
             ):
                 param.requires_grad = False
@@ -398,7 +395,7 @@ class ProtNoteTrainer:
 
         with torch.no_grad():
             for batch in data_loader:
-                _, logits, label_multihots, _, embeddings = self.evaluation_step(
+                _, logits, label_multihots, _, _embeddings = self.evaluation_step(
                     batch=batch,
                 )
 
@@ -442,7 +439,7 @@ class ProtNoteTrainer:
                 applicable_label_dict=self.label_normalizer,
             ),
             device=self.device,
-        )
+        ).
         """
 
     def evaluate(
@@ -460,7 +457,7 @@ class ProtNoteTrainer:
         :param eval_metrics: an eval metrics class to calculate metrics like F1 score, defaults to None
         :type eval_metrics: EvalMetrics, optional
         :return: dictionary with evaluation metrics. Always return avg_loss and if eval_metrics is not None, it will return the metrics from eval_metrics.compute()
-        :rtype: dict
+        :rtype: dict.
         """
         self.model.eval()
         test_results = defaultdict(list)
@@ -473,11 +470,11 @@ class ProtNoteTrainer:
         if eval_metrics is not None:
             eval_metrics.reset()
 
-        if self.config["params"]["ESTIMATE_MAP"] == False:
+        if not self.config["params"]["ESTIMATE_MAP"]:
             mAP_micro = BinaryAUPRC(device="cpu")
             mAP_macro = MultilabelAUPRC(device="cpu", num_labels=num_labels)
 
-        elif self.config["params"]["ESTIMATE_MAP"] == True:
+        elif self.config["params"]["ESTIMATE_MAP"]:
             mAP_micro = BinaryBinnedAUPRC(device=self.device, threshold=50)
             mAP_macro = MultilabelBinnedAUPRC(
                 device=self.device,
@@ -610,7 +607,7 @@ class ProtNoteTrainer:
             #                )
 
             if save_results:
-                for key in test_results.keys():
+                for key in test_results:
                     if key == "sequence_ids":
                         test_results[key] = np.array(
                             [j for i in test_results["sequence_ids"] for j in i],
@@ -628,7 +625,7 @@ class ProtNoteTrainer:
                                 data_loader.dataset.label_vocabulary,
                                 data_loader.dataset.represented_vocabulary_mask,
                             )
-                            if mask == True
+                            if mask
                         ],
                         run_name=self.run_name,
                         output_dir=self.config["paths"]["RESULTS_DIR"],
@@ -851,7 +848,7 @@ class ProtNoteTrainer:
         :param val_loader: validation set dataloader
         :type val_loader: torch.utils.data.DataLoader
         :param val_optimization_metric_name: metric name  used to save checkpoints based on validation performance
-        :type val_optimization_metric_name: str
+        :type val_optimization_metric_name: str.
         """
         self.model.train()
 

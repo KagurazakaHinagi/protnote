@@ -122,7 +122,7 @@ def main():
     logging.info(
         "Flattening descriptions for batch processing and calculating sequence token lengths...",
     )
-    print("SOS = ", args.account_for_sos, args.account_for_sos == False)
+    print("SOS = ", args.account_for_sos, not args.account_for_sos)
     embeddings_idx = {
         "id": [],
         "description_type": [],

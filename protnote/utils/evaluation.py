@@ -64,7 +64,7 @@ class SamplewiseRecall(Metric):
 
 class SamplewiseCoverage(Metric):
     def __init__(self, threshold: float, device: str):
-        super(SamplewiseCoverage, self).__init__()
+        super().__init__()
         self.threshold = threshold
         self.add_state(
             "at_least_one_positive_pred",
@@ -104,9 +104,8 @@ class SamplewiseF1Score(Metric):
     def compute(self) -> torch.Tensor:
         precision = self.precision_samplewise.compute()
         recall = self.recall_samplewise.compute().mean()
-        f1 = 2 * (precision * recall) / (precision + recall + 1e-6)
+        return 2 * (precision * recall) / (precision + recall + 1e-6)
 
-        return f1
 
 
 def metric_collection_to_dict_float(metric_collection: MetricCollection, prefix=None):
@@ -122,17 +121,16 @@ def metric_collection_to_dict_float(metric_collection: MetricCollection, prefix=
             if np.issubdtype(type(v), np.floating):
                 metric_collection[k] = v.astype("float32")
 
-    metric_collection = {
+    return {
         (f"{prefix}_{k}" if prefix is not None else k): v
         for k, v in metric_collection.items()
     }
 
-    return metric_collection
 
 
 class EvalMetrics:
     def __init__(self, device: str):
-        """_summary_
+        """_summary_.
 
         :param device: _description_
         :type device: str
@@ -142,7 +140,7 @@ class EvalMetrics:
     def _get_label_centered_metrics(self, threshold: float, num_labels: int) -> dict:
         # TODO: Change micro metrics to task='binary' or use Binary version of the metrics
         # num labels is unnecessary for micro metrics
-        """_summary_
+        """_summary_.
 
         :param threshold: _description_
         :type threshold: float
@@ -183,7 +181,7 @@ class EvalMetrics:
         return label_centered_metrics
 
     def _get_sample_centered_metrics(self, threshold) -> dict:
-        """_summary_
+        """_summary_.
 
         :param threshold: _description_
         :type threshold: _type_
@@ -213,7 +211,7 @@ class EvalMetrics:
         threshold: float,
         num_labels: int,
     ) -> MetricCollection:
-        """_summary_
+        """_summary_.
 
         :param type: _description_
         :type type: Literal[&quot;labeled_centered&quot;, &quot;sample_centered&quot;, &quot;all&quot;]
@@ -246,9 +244,9 @@ class EvalMetrics:
         self,
         pattern: str,
         num_labels: int,
-        threshold: float = None,
+        threshold: float | None = None,
     ) -> MetricCollection:
-        """_summary_
+        """_summary_.
 
         :param pattern: _description_
         :type pattern: str
@@ -269,9 +267,9 @@ class EvalMetrics:
         self,
         name: str,
         num_labels: int,
-        threshold: float = None,
+        threshold: float | None = None,
     ) -> Metric:
-        """_summary_
+        """_summary_.
 
         :param name: _description_
         :type name: str
@@ -354,7 +352,7 @@ def metrics_per_label_df(
     device: str,
     threshold: None,
 ) -> pd.DataFrame:
-    """Calculate the following per label metrics: Average Precision,F1,Precision,Recall,label frequency
+    """Calculate the following per label metrics: Average Precision,F1,Precision,Recall,label frequency.
 
     :param labels_df: dataframe where each column is a label and every row an observation. element row=i,col=j is 1
         if observation i has label j, 0 otherwise
@@ -371,7 +369,6 @@ def metrics_per_label_df(
 
     """
     rows = []
-    labels = labels_df.columns
     mask_at_least_one_label = labels_df.sum() > 0
     labels_at_least_one_pos = labels_df.columns[mask_at_least_one_label]
     labels_undefined = labels_df.columns[~mask_at_least_one_label]

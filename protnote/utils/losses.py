@@ -16,7 +16,7 @@ class SupCon(torch.nn.Module):
         P_e: Batch of projected protein embeddings [batch_size, joint_embedding_dim]
         L_e: Batch of projected GO label embeddings [batch_size, joint_embedding_dim]
         t: Temperature parameter
-        target: Batch of "target" GO annotations [batch_size, num_labels]
+        target: Batch of "target" GO annotations [batch_size, num_labels].
         """
         # Compute loss for each direction (protein to label and label to protein)
         overall_loss_p = one_way_supcon(logits=input, labels_multihot=target, dim=1)
@@ -32,7 +32,7 @@ class SupCon(torch.nn.Module):
 
 
 def one_way_supcon(logits, labels_multihot, dim):
-    """dim=1 is traditional entropy of predicting labels"""
+    """dim=1 is traditional entropy of predicting labels."""
     # for numerical stability
     logits_max, _ = torch.max(logits, dim=dim, keepdim=True)
     logits = logits - logits_max.detach()
@@ -49,8 +49,7 @@ def one_way_supcon(logits, labels_multihot, dim):
         0,
     )  # In case dim = 0 and there are labels always negative
     # loss
-    loss = -mean_log_prob_pos.mean()
-    return loss
+    return -mean_log_prob_pos.mean()
 
 
 class RGDBCE(torch.nn.Module):
@@ -97,13 +96,12 @@ class CBLoss(torch.nn.Module):
         weights = weights / torch.sum(weights) * no_of_classes
 
         weights = get_batch_weights_v2(weights, target)
-        cb_loss = F.binary_cross_entropy_with_logits(
+        return F.binary_cross_entropy_with_logits(
             input=input,
             target=target,
             weight=weights,
         )
 
-        return cb_loss
 
 
 class WeightedBCE(torch.nn.Module):
@@ -249,9 +247,8 @@ def get_batch_weights_v2(label_weights, target):
 
     # Use broadcasting again for expanding weights across the class dimension
     # No need to repeat the tensor explicitly.
-    weights_for_samples = weights_for_samples.expand_as(target)
+    return weights_for_samples.expand_as(target)
 
-    return weights_for_samples
 
 
 def get_batch_weights_v1(label_weights, target=None):
@@ -259,7 +256,7 @@ def get_batch_weights_v1(label_weights, target=None):
     Args:
         label_weights: A tensor of size [no_of_classes] with the weight of each label
         target: torch.tensor of size [batch, no_of_classes]
-        beta: float,
+        beta: float,.
 
     Returns:
         weights_for_samples: torch.tensor of size [batch, no_of_classes]
@@ -273,8 +270,7 @@ def get_batch_weights_v1(label_weights, target=None):
     )
     weights_for_samples = weights_for_samples.sum(1)
     weights_for_samples = weights_for_samples.unsqueeze(1)
-    weights_for_samples = weights_for_samples.repeat(1, no_of_classes)
-    return weights_for_samples
+    return weights_for_samples.repeat(1, no_of_classes)
 
 
 def get_loss(

@@ -7,7 +7,7 @@ def upload(filename, path, bucket, access_token):
     # This is verbatim from the docs, but they forgot the params section
     with open(path, "rb") as fp:
         r = requests.put(
-            "%s/%s" % (bucket, filename),
+            f"{bucket}/{filename}",
             data=fp,
             params={"access_token": access_token},
         )

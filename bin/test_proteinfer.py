@@ -138,7 +138,7 @@ config = get_setup(
     base_label_embedding_name=args.base_label_embedding_name,
     amlt=False,
     is_master=True,
-    overrides=args.override + ["EXTRACT_VOCABULARIES_FROM", "null"]
+    overrides=[*args.override, "EXTRACT_VOCABULARIES_FROM", "null"]
     if args.only_represented_labels
     else args.override,
 )
@@ -249,7 +249,7 @@ eval_metrics = EvalMetrics(device=device)
 label_sample_sizes = {
     k: (v if v is not None else len(datasets[k][0].label_vocabulary))
     for k, v in label_sample_sizes.items()
-    if k in datasets.keys()
+    if k in datasets
 }
 
 full_data_path = (
@@ -287,7 +287,7 @@ for loader_name, loader in loaders.items():
     mAP_macro = MultilabelAUPRC(device="cpu", num_labels=label_sample_sizes["test"])
 
     with torch.no_grad(), autocast(enabled=True):
-        for batch_idx, batch in tqdm(enumerate(loader[0]), total=len(loader[0])):
+        for _batch_idx, batch in tqdm(enumerate(loader[0]), total=len(loader[0])):
             # Unpack the validation or testing batch
             (
                 sequence_onehots,
@@ -352,7 +352,7 @@ for loader_name, loader in loaders.items():
         print("=" * 20, "\n\n")
 
         if args.save_prediction_results:
-            for key in test_results.keys():
+            for key in test_results:
                 if key == "sequence_ids":
                     test_results[key] = np.array(
                         [j for i in test_results["sequence_ids"] for j in i],

@@ -78,7 +78,7 @@ class DistributedWeightedSampler(Sampler):
             self.weights = torch.tensor(self.weights, dtype=torch.double)
 
         # Determine the number of samples for each GPU, rounding down to ensure it is evenly divisible
-        self.num_samples = int(math.floor(len(self.weights) * 1.0 / self.world_size))
+        self.num_samples = math.floor(len(self.weights) * 1.0 / self.world_size)
 
         # Determine the total number of samples
         self.total_size = self.num_samples * self.world_size

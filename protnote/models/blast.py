@@ -46,10 +46,7 @@ class BlastTopHits:
 
     def blast_db_exists(self):
         required_extensions = [".pin", ".phr", ".psq"]
-        for ext in required_extensions:
-            if not os.path.exists(f"{self.db_path}{ext}"):
-                return False
-        return True
+        return all(os.path.exists(f"{self.db_path}{ext}") for ext in required_extensions)
 
     def run_blast(self, output_path: str, top_k_hits: int):
         if not self.blast_db_exists():
@@ -70,7 +67,7 @@ class BlastTopHits:
             num_threads=self.num_threads,
             max_target_seqs=top_k_hits,
         )
-        stdout, stderr = blastp_cline()
+        _stdout, _stderr = blastp_cline()
         get_results_end_time = time.time()
         self.run_duration_seconds = get_results_end_time - get_results_start_time
 
@@ -89,8 +86,7 @@ class BlastTopHits:
 
     def __parse_blast_line(self, line: str) -> dict:
         data = line.strip().split("\t")
-        parsed_line = {colname: data[idx] for idx, colname in self.columns.items()}
-        return parsed_line
+        return {colname: data[idx] for idx, colname in self.columns.items()}
 
     def __transfer_hit_labels(self, parsed_line: dict):
         if self.db_seq_2_labels is None:
@@ -146,7 +142,7 @@ class BlastTopHits:
             )
 
             # parsed_results = process_map(wrapper,handle,max_workers = self.num_threads)
-            with tqdm_joblib(tqdm(total=len(lines))) as pbar:
+            with tqdm_joblib(tqdm(total=len(lines))):
                 parsed_results = Parallel(n_jobs=self.num_threads)(
                     delayed(wrapper)(line) for line in lines
                 )

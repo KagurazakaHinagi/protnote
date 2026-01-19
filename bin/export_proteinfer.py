@@ -32,7 +32,7 @@ def export_model_weights(
 
     tags = [tf.saved_model.tag_constants.SERVING]
     name_scope = "inferrer"
-    module = hub.Module(module_spec, trainable=True, tags=tags, name=name_scope)
+    hub.Module(module_spec, trainable=True, tags=tags, name=name_scope)
 
     with tf.Session() as sess:
         sess.run([tf.global_variables_initializer(), tf.tables_initializer()])

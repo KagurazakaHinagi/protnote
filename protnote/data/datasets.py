@@ -34,7 +34,7 @@ class ProteinDataset(Dataset):
             data_path (str): Path to the FASTA file containing the protein sequences and corresponding GO annotations
             dataset_type (str): One of 'train', 'validation', or 'test'
             go_descriptions_path (str): Path to the pickled file containing the GO term descriptions mapped to GO term IDs
-        deduplicate (bool): Whether to remove duplicate sequences (default: False)
+        deduplicate (bool): Whether to remove duplicate sequences (default: False).
         """
         self.logger = logger
         # Error handling: check for missing keys and invalid dataset types
@@ -69,8 +69,8 @@ class ProteinDataset(Dataset):
         self.blosum62 = defaultdict(
             dict,
             {
-                aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62.keys()}
-                for aa1 in blosum62.keys()
+                aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62}
+                for aa1 in blosum62
             },
         )
 
@@ -143,7 +143,7 @@ class ProteinDataset(Dataset):
 
     def _preprocess_data(self, deduplicate, max_sequence_length, vocabulary_path):
         """Remove duplicate sequences from self.data, keeping only the first instance of each sequence
-        Use pandas to improve performance
+        Use pandas to improve performance.
         """
         self.logger.info("Cleaning data...")
         # Convert self.data to a DataFrame
@@ -275,7 +275,7 @@ class ProteinDataset(Dataset):
         embeddings: torch.Tensor,
     ):
         assert set(self.inference_go_descriptions).issubset(
-            set(["name", "label"]),
+            {"name", "label"},
         ), """only supporting name, label or name+label"""
 
         self.logger.info("Processing label embeddings...")
@@ -352,7 +352,7 @@ class ProteinDataset(Dataset):
         sequence: str,
         sequence_id_alphanumeric: str,
         labels: list[str],
-        label_idxs: list[int] = None,
+        label_idxs: list[int] | None = None,
     ) -> dict:
         # One-hot encode the labels for use in the loss function (not a model input, so should not be impacted by augmentation)
         labels_ints = torch.tensor(
@@ -577,15 +577,14 @@ def set_padding_to_sentinel(
     mask = mask.unsqueeze(1).expand(-1, dim, -1)
 
     # Use the mask to set the padding values to sentinel
-    padded_representations = torch.where(mask, sentinel, padded_representations)
+    return torch.where(mask, sentinel, padded_representations)
 
-    return padded_representations
 
 
 def create_multiple_loaders(
     datasets: dict,
     params: dict,
-    label_sample_sizes: dict = None,
+    label_sample_sizes: dict | None = None,
     grid_sampler: bool = False,
     shuffle_labels: bool = False,
     in_batch_sampling: bool = False,

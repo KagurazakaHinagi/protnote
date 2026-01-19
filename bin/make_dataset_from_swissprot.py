@@ -67,7 +67,7 @@ def main(
 
     # Load the configuration and project root
     config, project_root = load_config()
-    results_dir = config["paths"]["output_paths"]["RESULTS_DIR"]
+    config["paths"]["output_paths"]["RESULTS_DIR"]
     swissprot_dir = project_root / "data" / "swissprot"
     annotations_dir = project_root / "data" / "annotations"
     latest_swissprot_file = swissprot_dir / latest_swissprot_file
@@ -177,14 +177,13 @@ def main(
     reverse_parenthood = reverse_map(parenthood)
     leaf_nodes = []
     for parent, children in reverse_parenthood.items():
-        leaf_node = list(children)[0]
+        leaf_node = next(iter(children))
         if (
             "GO" in parent
             and len(children) == 1
             and leaf_node in annotations_latest.index
-        ):
-            if "obsolete" not in annotations_latest.loc[leaf_node, "name"]:
-                leaf_nodes.append(leaf_node)
+        ) and "obsolete" not in annotations_latest.loc[leaf_node, "name"]:
+            leaf_nodes.append(leaf_node)
     leaf_nodes = set(leaf_nodes)
 
     def add_go_parents(go_terms: list):
@@ -199,23 +198,23 @@ def main(
     df_latest["go_ids"] = df_latest["go_ids"].apply(add_go_parents)
 
     if sequence_vocabulary == "new":
-        sequence_ids_2019 = set([id for _, id, _ in pinf_train + pinf_val])
+        sequence_ids_2019 = {id for _, id, _ in pinf_train + pinf_val}
         in_proteinfer_train_val = df_latest.seq_id.apply(
             lambda x: x in sequence_ids_2019,
         )
-        df_latest = df_latest[(in_proteinfer_train_val == False)]
+        df_latest = df_latest[(not in_proteinfer_train_val)]
     elif sequence_vocabulary == "proteinfer_test":
-        proteinfer_test_set_seqs = set([id for _, id, _ in pinf_test])
+        proteinfer_test_set_seqs = {id for _, id, _ in pinf_test}
         in_proteinfer_test = df_latest.seq_id.apply(
             lambda x: x in proteinfer_test_set_seqs,
         )
-        df_latest = df_latest[(in_proteinfer_test == True)]
+        df_latest = df_latest[(in_proteinfer_test)]
     elif sequence_vocabulary == "proteinfer_train":
-        proteinfer_train_set_seqs = set([id for _, id, _ in pinf_train])
+        proteinfer_train_set_seqs = {id for _, id, _ in pinf_train}
         in_proteinfer_train = df_latest.seq_id.apply(
             lambda x: x in proteinfer_train_set_seqs,
         )
-        df_latest = df_latest[(in_proteinfer_train == True)]
+        df_latest = df_latest[(in_proteinfer_train)]
     elif sequence_vocabulary == "all":
         pass
     else:
@@ -230,7 +229,7 @@ def main(
     elif label_vocabulary == "new":
         vocab = new_go_labels
     elif label_vocabulary == "all":
-        vocab = set([j for i in df_latest.go_ids for j in i])
+        vocab = {j for i in df_latest.go_ids for j in i}
 
     if only_leaf_nodes:
         vocab &= leaf_nodes
@@ -256,7 +255,7 @@ def main(
     SwissProt_latest = filtered_df[filtered_df.non_common_amino_acids == set()]
 
     # Rename columns
-    final_labels = set([j for i in SwissProt_latest["go_ids"] for j in i])
+    final_labels = {j for i in SwissProt_latest["go_ids"] for j in i}
     logger.info(
         "Number of sequences in dataframe: "
         + str(len(SwissProt_latest))

@@ -96,14 +96,12 @@ def read_fasta(data_path: str, sep=" "):
 
 def read_yaml(data_path: str):
     with open(data_path) as file:
-        data = yaml.safe_load(file)
-    return data
+        return yaml.safe_load(file)
 
 
 def read_json(data_path: str):
     with open(data_path) as file:
-        data = json.load(file)
-    return data
+        return json.load(file)
 
 
 def write_json(data, data_path: str):
@@ -118,9 +116,9 @@ def get_vocab_mappings(vocabulary):
     return term2int, int2term
 
 
-def generate_vocabularies(file_path: str = None, data: list = None) -> dict:
+def generate_vocabularies(file_path: str | None = None, data: list | None = None) -> dict:
     """Generate vocabularies based on the provided data path.
-    path must be .fasta file
+    path must be .fasta file.
     """
     if not ((file_path is None) ^ (data is None)):
         raise ValueError("Only one of file_path OR data must be passed, not both.")
@@ -143,7 +141,7 @@ def generate_vocabularies(file_path: str = None, data: list = None) -> dict:
         vocabs["amino_acid_vocab"].update(list(sequence))
 
     for vocab_type in vocabs:
-        vocabs[vocab_type] = sorted(list(vocabs[vocab_type]))
+        vocabs[vocab_type] = sorted(vocabs[vocab_type])
 
     return vocabs
 
@@ -179,8 +177,7 @@ def save_to_fasta(sequence_id_labels_tuples, output_file):
 
 def read_pickle(file_path: str):
     with open(file_path, "rb") as p:
-        item = pickle.load(p)
-    return item
+        return pickle.load(p)
 
 
 def download_and_unzip(url, output_file):
@@ -235,7 +232,7 @@ def remove_obsolete_from_string(text):
 
 
 class Blossum62Mutations:
-    def __init__(self, amino_acid_vocabulary: set | list = None):
+    def __init__(self, amino_acid_vocabulary: set | list | None = None):
         if amino_acid_vocabulary is None:
             self.amino_acid_vocabulary = set(COMMON_AMINOACIDS)
         else:
@@ -246,8 +243,8 @@ class Blossum62Mutations:
         self.blosum62 = defaultdict(
             dict,
             {
-                aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62.keys()}
-                for aa1 in blosum62.keys()
+                aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62}
+                for aa1 in blosum62
             },
         )
 
@@ -427,7 +424,7 @@ def get_ec_number_description(enzyme_dat_path: str, ec_classes: dict) -> list:
 
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
-    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    """Context manager to patch joblib to report into tqdm progress bar given as argument."""
 
     class TqdmBatchCompletionCallback(parallel.BatchCompletionCallBack):
         def __call__(self, *args, **kwargs):

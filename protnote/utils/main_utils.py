@@ -13,15 +13,14 @@ def validate_arguments(args, parser):
     # Ensure the full data path is provided, or we are using the zero shot model
     if args.full_path_name is None and "zero" not in str(args.train_path_name).lower():
         warnings.warn(
-            "The full path name is not provided and the train path name does not contain the word 'zero'. Please ensure this is intentional.",
+            "The full path name is not provided and the train path name does not contain the word 'zero'. Please ensure this is intentional.", stacklevel=2,
         )
 
     # Raise error if train is provided without val
-    if args.train_path_name is not None:
-        if args.validation_path_name is None:
-            parser.error(
-                "If providing --train-path-name you must provide --val-path-name.",
-            )
+    if args.train_path_name is not None and args.validation_path_name is None:
+        parser.error(
+            "If providing --train-path-name you must provide --val-path-name.",
+        )
 
     # Raise error if no train path is provided and no model is loaded
     if (args.train_path_name is None) and (args.model_file is None):
@@ -91,5 +90,4 @@ def generate_sequence_embeddings(device, sequence_encoder, datasets, params):
 
     sequence_encoder.train()
     # Convert the list to a DataFrame
-    df = pd.DataFrame(data_list, columns=["ID", "Embedding"]).set_index("ID")
-    return df
+    return pd.DataFrame(data_list, columns=["ID", "Embedding"]).set_index("ID")

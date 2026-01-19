@@ -6,13 +6,12 @@ from pathlib import Path
 
 # Define the list of IDs
 def run_command(command):
-    """Utility function to run a shell command"""
-    result = subprocess.run(command, shell=True, check=True, text=True)
-    return result
+    """Utility function to run a shell command."""
+    return subprocess.run(command, shell=True, check=True, text=True)
 
 
 def download_and_extract_model(id):
-    """Download, extract, and export the model if it doesn't exist"""
+    """Download, extract, and export the model if it doesn't exist."""
     model_dir = (
         Path(__file__).resolve().parent.parent / "data" / "models" / "proteinfer"
     )
@@ -50,7 +49,7 @@ def download_and_extract_model(id):
 
 
 def run_inference(id):
-    """Run inference with the specified model weights"""
+    """Run inference with the specified model weights."""
     run_command(
         f"conda run -n protnote python bin/test_proteinfer.py --test-paths-names TEST_DATA_PATH --only-inference --only-represented-labels --save-prediction-results --name TEST_DATA_PATH_proteinfer --model-weights-id {id}",
     )

@@ -36,7 +36,7 @@ def main():
     )[["ec_number", "label"]]
 
     ec_annotations["ec_number"] = "EC:" + ec_annotations["ec_number"]
-    ec_annotations.set_index("ec_number", inplace=True)
+    ec_annotations = ec_annotations.set_index("ec_number")
 
     ec_annotations.index.name = None
     ec_annotations["name"] = ec_annotations["synonym_exact"] = ec_annotations["label"]

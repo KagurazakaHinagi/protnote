@@ -217,14 +217,13 @@ def get_label_embeddings(
                 input_ids=tokenized_labels["input_ids"],
                 attention_mask=tokenized_labels["attention_mask"],
             ).last_hidden_state
-        sequence_embeddings = pool_embeddings(
+        return pool_embeddings(
             sequence_embeddings,
             tokenized_labels["attention_mask"],
             method,
             account_for_sos=account_for_sos,
         )
 
-        return sequence_embeddings
 
     # Convert dictionary values to tensors
     tensors = [tokenized_labels["input_ids"], tokenized_labels["attention_mask"]]
@@ -258,11 +257,10 @@ def get_label_embeddings(
         )
         del sequence_embeddings
 
-        if len(dataloader) >= 10:
-            if (idx + 1) % (len(dataloader) // 10) == 0:
-                logging.info(
-                    f"label embedding generation progress = {round((idx + 1) * 100 / len(dataloader), 2)}%",
-                )
+        if len(dataloader) >= 10 and (idx + 1) % (len(dataloader) // 10) == 0:
+            logging.info(
+                f"label embedding generation progress = {round((idx + 1) * 100 / len(dataloader), 2)}%",
+            )
 
     # Concatenate all the label embeddings
     model.train()
@@ -305,7 +303,7 @@ def sigmoid_bias_from_prob(prior_prob):
 
 
 def print_checkpoint(checkpoint):
-    """For debugging"""
+    """For debugging."""
     print("epoch", checkpoint["epoch"])
     print("best_val_metric", checkpoint["best_val_metric"])
 
@@ -363,7 +361,7 @@ def load_model(trainer, checkpoint_path: str, rank: int, from_checkpoint=False):
     state_dict = checkpoint["model_state_dict"]
 
     # Check if the state_dict is from a DDP-wrapped model
-    if list(state_dict.keys())[0].startswith("module."):
+    if next(iter(state_dict.keys())).startswith("module."):
         # Remove the "module." prefix
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():

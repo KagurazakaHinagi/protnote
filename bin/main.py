@@ -562,7 +562,7 @@ def train_validate_test(gpu, args):
     label_sample_sizes = {
         k: (v if v is not None else len(datasets[k][0].label_vocabulary))
         for k, v in label_sample_sizes.items()
-        if k in datasets.keys()
+        if k in datasets
     }
 
     # Log sizes of all datasets

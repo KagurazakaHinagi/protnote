@@ -135,7 +135,7 @@ def main():
             len(simplified_results) - (batch) * pivoting_batch_size,
         )
 
-        with tqdm_joblib(tqdm(total=batch_size)) as pbar:
+        with tqdm_joblib(tqdm(total=batch_size)):
             records = Parallel(n_jobs=multiprocessing.cpu_count())(
                 delayed(record_to_pivot)(idx_row)
                 for idx_row in simplified_results[
@@ -143,8 +143,8 @@ def main():
                 ].iterrows()
             )
 
-        result = pd.DataFrame(records, columns=["sequence_name"] + db_vocab)
-        result.set_index("sequence_name", inplace=True)
+        result = pd.DataFrame(records, columns=["sequence_name", *db_vocab])
+        result = result.set_index("sequence_name")
         result.index.name = None
         result.to_parquet(
             str(pivot_parsed_results_output_path).replace(".parquet", "")

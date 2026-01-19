@@ -48,7 +48,7 @@ def main(
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    assert test_name in TEST_COMMANDS.keys(), f"{test_name} does not exist"
+    assert test_name in TEST_COMMANDS, f"{test_name} does not exist"
 
     if label_embedding_model == "E5":
         label_embeddings = "2024_E5_multiling_inst_frozen_label_embeddings_mean"

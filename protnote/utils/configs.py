@@ -75,7 +75,7 @@ def override_config(config: dict, overrides: list):
 def generate_label_embedding_path(params: dict, base_label_embedding_path: str):
     """Generates the name of the file that caches label embeddings. Needed due to different
     ways of pooling embeddings, different types of go descriptions and other paramters.
-    This way we can store different versions/types of label embeddings for caching
+    This way we can store different versions/types of label embeddings for caching.
     """
     assert params["LABEL_ENCODER_CHECKPOINT"] in [
         "microsoft/biogpt",
@@ -94,28 +94,25 @@ def generate_label_embedding_path(params: dict, base_label_embedding_path: str):
 
     base_model = temp[0].split("_")
     base_model = "_".join(
-        [base_model[0]]
-        + [MODEL_NAME_2_NICKNAME[params["LABEL_ENCODER_CHECKPOINT"]]]
-        + base_model[1:],
+        [base_model[0], MODEL_NAME_2_NICKNAME[params["LABEL_ENCODER_CHECKPOINT"]], *base_model[1:]],
     )
 
     label_embedding_path[-1] = (
         base_model + "_" + params["LABEL_EMBEDDING_POOLING_METHOD"] + "." + temp[1]
     )
 
-    label_embedding_path = "/".join(label_embedding_path)
-    return label_embedding_path
+    return "/".join(label_embedding_path)
 
 
 def get_setup(
     config_path: str,
     run_name: str,
     overrides: list,
-    train_path_name: str = None,
-    val_path_name: str = None,
-    test_paths_names: list = None,
-    annotations_path_name: str = None,
-    base_label_embedding_name: str = None,
+    train_path_name: str | None = None,
+    val_path_name: str | None = None,
+    test_paths_names: list | None = None,
+    annotations_path_name: str | None = None,
+    base_label_embedding_name: str | None = None,
     amlt: bool = False,
     is_master: bool = True,
 ):

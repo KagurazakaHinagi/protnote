@@ -47,7 +47,6 @@ def collate_variable_sequence_length(
     processed_sequence_ids = []
     processed_sequence_lengths = []
     processed_label_multihots = []
-    processed_label_token_counts = []
     processed_label_embeddings = None
 
     if grid_sampler:

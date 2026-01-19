@@ -28,7 +28,7 @@ def calculate_label(row):
 
 
 def process_synonyms(row) -> dict:
-    """Extracts the synonyms of a GO Annotation
+    """Extracts the synonyms of a GO Annotation.
 
     :param row: Row of GO annotation dataset
     :type row: _type_
@@ -92,7 +92,7 @@ def main(url: str, output_file: str):
     df = pd.concat([df, df_synonyms], axis=1)
 
     # Filter the dataframe to retain only 'label', 'name' and 'synonym' columns, with the 'id' column as the index
-    df_filtered = df[["label", "name"] + list(df_synonyms.columns) + ["is_obsolete"]]
+    df_filtered = df[["label", "name", *list(df_synonyms.columns), "is_obsolete"]]
 
     # Save the filtered dataframe as a pickle
     df_filtered.to_pickle(output_file)

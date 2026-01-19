@@ -17,7 +17,7 @@ def transfer_tf_weights_to_torch(torch_model: torch.nn.Module, tf_weights_path: 
         temp[tf_name] = tf_param
         if ("batch_normalization" in tf_name) & ("moving_variance" in tf_name):
             num_batches_name = "/".join(
-                tf_name.split("/")[:-1] + ["num_batches_tracked:0"],
+                [*tf_name.split("/")[:-1], "num_batches_tracked:0"],
             )
             temp[num_batches_name] = np.array(num_batches)
     tf_weights = temp

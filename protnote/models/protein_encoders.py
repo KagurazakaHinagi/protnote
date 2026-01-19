@@ -1,9 +1,8 @@
 import numpy as np
 import torch
 
+from protnote.data.datasets import set_padding_to_sentinel
 from protnote.utils.proteinfer import transfer_tf_weights_to_torch
-
-from ..data.datasets import set_padding_to_sentinel
 
 
 class MaskedConv1D(torch.nn.Conv1d):
@@ -13,8 +12,7 @@ class MaskedConv1D(torch.nn.Conv1d):
         """
         x = set_padding_to_sentinel(x, sequence_lengths, 0)
         x = super().forward(x)
-        x = set_padding_to_sentinel(x, sequence_lengths, 0)
-        return x
+        return set_padding_to_sentinel(x, sequence_lengths, 0)
 
 
 # ResNet-V2 https://arxiv.org/pdf/1602.07261v2.pdf
@@ -64,8 +62,7 @@ class Residual(torch.nn.Module):
         out = self.masked_conv1(out, sequence_lengths)
         out = self.bn_activation_2(out)
         out = self.masked_conv2(out, sequence_lengths)
-        out = out + x
-        return out
+        return out + x
 
 
 class ProteInfer(torch.nn.Module):
@@ -111,18 +108,16 @@ class ProteInfer(torch.nn.Module):
     def get_embeddings(self, x, sequence_lengths):
         features = self.conv1(x, sequence_lengths)
         # Sequential doesn't work here because of multiple inputs
-        for idx, resnet_block in enumerate(self.resnet_blocks):
+        for _idx, resnet_block in enumerate(self.resnet_blocks):
             features = resnet_block(features, sequence_lengths)
         features = set_padding_to_sentinel(features, sequence_lengths, 0)
-        features = torch.sum(features, dim=-1) / sequence_lengths.unsqueeze(
+        return torch.sum(features, dim=-1) / sequence_lengths.unsqueeze(
             -1,
         )  # Average pooling
-        return features
 
     def forward(self, x, sequence_lengths):
         features = self.get_embeddings(x, sequence_lengths)
-        logits = self.output_layer(features)
-        return logits
+        return self.output_layer(features)
 
     @classmethod
     def from_pretrained(

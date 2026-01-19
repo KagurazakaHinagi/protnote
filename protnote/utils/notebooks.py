@@ -22,9 +22,8 @@ def complete_blast_preds(blast_df: pd.DataFrame, labels: list, seqs: list):
 
     # Consider only the sequences    in seqs, and add
     # sequences that blast missed
-    blast_df = blast_df[blast_cols].reindex(seqs).fillna(-15.0)
+    return blast_df[blast_cols].reindex(seqs).fillna(-15.0)
 
-    return blast_df
 
 
 def get_metrics(logits_df, labels_df, device, threshold):
@@ -87,20 +86,19 @@ def filter_by_go_ontology(ontology: str, df: pd.DataFrame, graph=None, parenthoo
     ]
     if ontology == "All":
         return df
-    filtered_df = df.iloc[:, [ontology == i for i in col_mask]]
-    return filtered_df
+    return df.iloc[:, [ontology == i for i in col_mask]]
 
 
 def filter_by_ec_level_1(ontology: str, df: pd.DataFrame, ec_class_descriptions: dict):
-    ec_number_to_ec_level_1 = lambda ec_number: (ec_number_to_code(ec_number)[0], 0, 0)
+    def ec_number_to_ec_level_1(ec_number):
+        return (ec_number_to_code(ec_number)[0], 0, 0)
     col_mask = [
         ec_class_descriptions[ec_number_to_ec_level_1(ec_number)]["label"]
         for ec_number in df.columns
     ]
     if ontology == "All":
         return df
-    filtered_df = df.iloc[:, [i == ontology for i in col_mask]]
-    return filtered_df
+    return df.iloc[:, [i == ontology for i in col_mask]]
 
 
 def metrics_by_go_ontology(df_logits, df_labels, graph, device, threshold):
@@ -131,7 +129,7 @@ def metrics_by_ec_level_1(
 ):
     results = {}
     ec_level_1s = [ec_class_descriptions[(i, 0, 0)]["label"] for i in range(1, 8)]
-    for ec_level_1 in ["All"] + ec_level_1s:
+    for ec_level_1 in ["All", *ec_level_1s]:
         filtered_df_logits = filter_by_ec_level_1(
             ontology=ec_level_1,
             df=df_logits,
@@ -176,7 +174,7 @@ def plot_category_performance(
     rotate_x_ticks: bool = False,
     pltshow=True,
     savefig=True,
-    name: str = None,
+    name: str | None = None,
     ax=None,
     figsize=None,
     palette=None,
@@ -187,7 +185,7 @@ def plot_category_performance(
         .reset_index()
     )
     if figsize is not None:
-        fig, ax = plt.subplots(figsize=figsize)
+        _fig, ax = plt.subplots(figsize=figsize)
 
     sns.barplot(
         data=plot_df,
@@ -296,16 +294,16 @@ def plot_metric_by_label_freq(
     threshold,
     device,
 ):
-    res_df, freq_bins, freq_bin_edges = get_metrics_by_label_and_freq(
+    res_df, freq_bins, _freq_bin_edges = get_metrics_by_label_and_freq(
         models=models,
         train_go_term_distribution=train_go_term_distribution,
         quantiles=quantiles,
         threshold=threshold,
         device=device,
     )
-    res_df.dropna(subset=[metric], inplace=True)
+    res_df = res_df.dropna(subset=[metric])
     freq_bins_pct = freq_bins.value_counts() * 100 / len(train_go_term_distribution)
-    fig, ax = plt.subplots(figsize=(15, 6))
+    _fig, ax = plt.subplots(figsize=(15, 6))
 
     # Annotate bars with the percentage of observations
     for index, value in enumerate(freq_bins_pct.sort_index().values):
@@ -338,7 +336,7 @@ def get_data_distributions(data: pd.DataFrame):
     labels = Counter()
     vocab = set()
     amino_freq = Counter()
-    for idx, row in data.iterrows():
+    for _idx, row in data.iterrows():
         sequence = row["sequence"]
         row_labels = row["labels"]
         aa_list = list(sequence)

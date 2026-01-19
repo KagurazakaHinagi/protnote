@@ -45,7 +45,7 @@ def filter_dataset(dataset, labels, desc="Filtering dataset"):
 
     """
     labels_set = set(labels)  # Convert list to set for O(1) lookup
-    filtered = [
+    return [
         (
             sequence,
             sequence_id,
@@ -53,7 +53,6 @@ def filter_dataset(dataset, labels, desc="Filtering dataset"):
         )
         for sequence, sequence_id, sequence_labels in tqdm(dataset, desc=desc)
     ]
-    return filtered
 
 
 def main():
