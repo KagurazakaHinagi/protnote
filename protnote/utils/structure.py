@@ -164,30 +164,22 @@ def parse_structure(cif_path: PathLike):
     return atom_array
 
 
-def _extract_amino_acids(atoms_array: bs.AtomArray) -> bs.AtomArray:
-    """Extract amino acid atoms from an AtomArray.
-
-    Args:
-        atoms_array (AtomArray): Atom array to extract from.
-
-    Returns:
-        AtomArray with only the amino acid atoms.
-    """
-    mask = bs.filter_amino_acids(atoms_array)
-    return atoms_array[mask]
-
-
-def _extract_residue_by_chain_ids(atom_array: bs.AtomArray, chain_ids: npt.ArrayLike) -> bs.AtomArray:
-    """Extract a subset of the atom array by chain IDs.
+def extract_aa_residue_by_chain_ids(atom_array: bs.AtomArray, chain_ids: npt.ArrayLike | None = None) -> bs.AtomArray:
+    """Extract a subset of the amino acid atom array by chain IDs.
 
     Args:
         atom_array (bs.AtomArray): Atom array to extract from.
-        chain_ids (List[str]): List of chain IDs to extract.
+        chain_ids (ArrayLike | None): List of chain IDs to extract.
 
     Returns:
-        AtomArray with only the atoms from the specified chain IDs.
+        AtomArray with only the amino acid atoms from the specified chain IDs.
     """
-    mask = np.isin(atom_array.chain_id, [chain_ids[0]])
+    residue_mask = bs.filter_amino_acids(atom_array)
+    if chain_ids:
+        chain_mask = atom_array.chain_id == chain_ids[0]
+        mask = chain_mask & residue_mask
+    else:
+        mask = residue_mask
     return atom_array[mask]
 
 
@@ -306,10 +298,6 @@ def build_protein_atom_graph(atom_array: bs.AtomArray, chains: npt.ArrayLike | N
             - n_atoms: int
             - n_residues: int
     """
-    # Filter chains and amino acid segments
-    if chains is not None:
-        atom_array = _extract_residue_by_chain_ids(atom_array, chains)
-    atom_array = _extract_amino_acids(atom_array)
 
     coords = atom_array.coord.astype(np.float32)
     n_atoms = coords.shape[0]
@@ -437,9 +425,7 @@ def trim_terminal_tags(
     if chain_atoms.array_length() == 0:
         return atom_array, 0, 0
 
-    # Build per-residue sequence from the chain
-    residues = _get_residue_list(chain_atoms)
-    # Filter to only residues from the target chain
+    # Build per-residue sequence from the target chain
     residues = [(rid, rname) for rid, rname, cid in _get_residue_list(atom_array) if cid == chain_id]
     struct_seq = "".join(residue_3_to_1(rname) for _, rname in residues)
 
@@ -585,8 +571,8 @@ def align_esmc_to_structure(
                 return None
 
         # Slow Path: use res_id-based indexing for non-contiguous gaps.
-        # AtomWorks label_seq_id is 1-indexed and corresponds to the
-        # canonical sequence position, so res_id i maps to FASTA index i-1.
+        # After trim_terminal_tags, res_ids may not start at 1 if an N-terminal
+        # tag at position 1 was removed. Use min_rid as the offset.
         if structure_res_ids is not None and subalign:
             unique_res_ids = []
             seen = set()
@@ -600,18 +586,25 @@ def align_esmc_to_structure(
                 logger.warning(f"res_id count ({len(unique_res_ids)}) != structure residue count ({n_struct_res}). Skipping alignment.")
                 return None
 
-            # Validate: res_ids should be within FASTA range (1-indexed)
             max_rid = max(unique_res_ids)
             min_rid = min(unique_res_ids)
-            if min_rid < 1 or max_rid > n_esmc_res:
-                logger.warning(f"res_id range [{min_rid}, {max_rid}] outside FASTA length {n_esmc_res}. Skipping alignment.")
+            if min_rid < 1 or (max_rid - min_rid) >= n_esmc_res:
+                logger.warning(
+                    f"res_id range [{min_rid}, {max_rid}] maps to indices "
+                    f"[0, {max_rid - min_rid}] which exceeds FASTA length "
+                    f"{n_esmc_res}. Skipping alignment."
+                )
                 return None
 
             # Validate: spot-check that residue identities match
             mismatches = 0
             for i, rid in enumerate(unique_res_ids):
-                fasta_aa = fasta_seq[rid - 1]
-                struct_aa = residue_3_to_1(structure_res_names[i])
+                fasta_idx = rid - min_rid
+                if fasta_idx >= len(fasta_sequence):
+                    mismatches += 1
+                    continue
+                fasta_aa = fasta_sequence[fasta_idx]
+                struct_aa = AA3TO1.get(structure_residue_names[i], "X")
                 if struct_aa != "X" and fasta_aa != struct_aa:
                     mismatches += 1
 
@@ -622,8 +615,8 @@ def align_esmc_to_structure(
                 )
                 return None
 
-            # Index ESM-C embeddings by res_id (convert 1-indexed to 0-indexed)
-            indices = torch.tensor([rid - 1 for rid in unique_res_ids], dtype=torch.long)
+            # Index ESM-C embeddings by res_id (offset by min_rid)
+            indices = torch.tensor([rid - min_rid for rid in unique_res_ids], dtype=torch.long)
             return esmc_emb[indices]
 
     logger.warning(f"Structure has {n_struct_res} residues, ESM-C has {n_esmc_res}.")
