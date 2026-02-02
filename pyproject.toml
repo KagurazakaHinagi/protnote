@@ -23,6 +23,7 @@ dependencies = [
     "biopython==1.84",
     "umap-learn==0.5.4",
     "tables==3.8.0",
+    "atomworks[ml,openbabel]>=2.2.0,<3", "esm @ git+https://github.com/KagurazakaHinagi/esm.git",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -33,6 +34,9 @@ include = [
     "protnote",
     "README.md",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.ruff]
 line-length = 140
@@ -54,13 +58,16 @@ torchvision = { version = "0.19.0.*", channel = "pytorch" }
 pytorch-cuda = { version = "11.8.*", channel = "pytorch" }
 
 numpy = "<2.0"
-pandas = "1.5.2.*"
+pandas = ">=2.3.3,<3"
 scipy = "1.13.1.*"
 scikit-learn = "1.5.0.*"
 matplotlib = "3.9.*"
 seaborn = "0.13.2.*"
 ipykernel = "6.29.5.*"
 joblib = "1.2.0.*"
+libstdcxx-ng = ">=15.2.0,<16"
+libgcc-ng = ">=15.2.0,<16"
+httpx = ">=0.28.1,<0.29"
 
 [tool.pixi.pypi-dependencies]
 protnote = { path = ".", editable = true }

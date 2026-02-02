@@ -45,6 +45,24 @@ def reverse_map(applicable_label_dict, label_vocab=None):
     return collections.defaultdict(frozenset, children.items())
 
 
+def _filter_structure_exprs(seq_len, records: list[tuple[str, ...]]) -> list[tuple[str, str]] | None:
+    """Filter experimental structure cross-references and find the best fit."""
+    if not records:
+        return None
+
+    comp_pattern = "1-" + str(seq_len)
+    comp_structures = []
+    for record in records:
+        # TODO: Better way to fetch the suitable PDB record
+        chain_info = record[-1].split("=")
+        if len(chain_info) != 2:
+            continue  # Skip this record if it doesn't have a single valid chain info
+        if chain_info[1] == comp_pattern:
+            comp_structures.append((record[1], chain_info[0]))
+
+    return comp_structures or None
+
+
 def main(
     latest_swissprot_file: str,
     output_file_path: str,
@@ -106,8 +124,14 @@ def main(
                 keywords = record.keywords
 
                 # Extract structure identifiers
-                struct_experimental = [ref for ref in record.cross_references if ref[0] == "PDB"]
-                struct_computational = [ref for ref in record.cross_references if ref[0] in ["AlphaFoldDB", "SMR"]]
+                struct_expr_all = [ref for ref in record.cross_references if ref[0] == "PDB"]
+                struct_expr = _filter_structure_exprs(record.sequence_length, struct_expr_all)
+
+                struct_afdb = [ref[1] for ref in record.cross_references if ref[0] in ["AlphaFoldDB"]]
+                struct_afdb = struct_afdb[0] if struct_afdb else None  # pick the first AlphaFoldDB ID if available
+
+                # Extract InterPro identifiers
+                interpro_ids = [ref[1] for ref in record.cross_references if ref[0] == "InterPro" and len(ref) > 0]
 
                 # Extract CC line as a dictionary
                 cc = {}
@@ -119,15 +143,16 @@ def main(
                     [
                         seq_id,
                         sequence,
+                        struct_expr,
+                        struct_afdb,
                         go_ids,
+                        interpro_ids,
                         description,
                         organism,
                         organism_classification,
                         organelle,
                         cc,
                         keywords,
-                        struct_experimental,
-                        struct_computational,
                     ]
                 )
 
@@ -140,15 +165,16 @@ def main(
             columns=[
                 "seq_id",
                 "sequence",
+                "struct_expr",
+                "struct_afdb",
                 "go_ids",
+                "interpro_ids",
                 "description",
                 "organism",
                 "organism_classification",
                 "organelle",
                 "cc",
                 "keywords",
-                "struct_experimental",
-                "struct_computational",
             ],
         )
         df_latest["subcellular_location"] = df_latest.cc.apply(lambda x: x.get("SUBCELLULAR LOCATION"))
@@ -261,7 +287,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-file-path",
         type=str,
-        help="Path to the output file. Should be a FASTA file. ",
+        help="Path to the output file. Should be a FASTA file.",
     )
     parser.add_argument(
         "--parsed-latest-swissprot-file",

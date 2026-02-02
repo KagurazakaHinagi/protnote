@@ -93,6 +93,12 @@ params:
     NUM_WORKERS: 3
     DECISION_TH: 0.5 # Set to null if you want to use the best threshold from validation
 
+    # ESM-C Embeddings
+    ESMC_MODEL_NAME: esmc_300m
+    ESMC_EMBEDDING_DIM: 960
+    ESMC_MATCH_SIZE: 8
+    KNN_K: 20
+
     # Subset fractions (for rapid prototyping; set to 1 for final model)[s]
     TRAIN_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
     VALIDATION_SUBSET_FRACTION: 1 # Set to 1.0 if you want to use all data
@@ -170,6 +176,20 @@ paths:
         2024_07_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_jul_2024.dat
         2025_10_SWISSPROT_DATA_PATH: swissprot/uniprot_sprot_oct_2025.dat
 
+        # Structure data
+        STRUCTURE_DIR: structures/
+        STRUCTURE_INDEX_PATH: structures/index.json
+
+        # ESM-C sequence embedding
+        ESMC_EMBEDDING_DIR: embeddings/esmc/
+        ESMC_INDEX_PATH: embeddings/esmc/index.json
+
+        # Processed graph data
+        PROCESSED_GRAPH_DIR: processed/
+        PROCESSED_GRAPH_INDEX_PATH: processed/index.json
+
+        TEMP_FASTA: new/protnote_expr.fasta
+
     # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
     output_paths:
         # Where to save the model
@@ -187,3 +207,11 @@ paths:
 
         # Modified data on HuggingFace
         HUGGINGFACE_DATA_REPO: kagurazakahinagi/protnote_data
+
+    database_urls:
+        # RCSB PDB: https://www.rcsb.org/docs/programmatic-access/file-download-services
+        RCSB_PDB_URL: https://files.rcsb.org/download
+
+        # AlphaFold DB:
+        ALPHAFOLD_DB_API: https://alphafold.ebi.ac.uk/api/prediction
+        ALPHAFOLD_DB_URL: https://alphafold.ebi.ac.uk/files
