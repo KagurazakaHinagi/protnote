@@ -120,7 +120,6 @@ def _process_one(seq_id: str) -> dict:
             esmc_emb,
             graph["residue_names"],
             fasta_seq=fasta_seq,
-            structure_res_ids=graph["residue_res_ids"],
         )
 
         if aligned_emb is None:

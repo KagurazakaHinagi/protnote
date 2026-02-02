@@ -526,7 +526,6 @@ def align_esmc_to_structure(
     esmc_emb: torch.Tensor,
     structure_res_names: list[str],
     fasta_seq: str | None = None,
-    structure_res_ids: np.ndarray | None = None,
     subalign: bool = True,
 ) -> torch.Tensor | None:
     """Align ESM-C per-residue embeddings to structure residues.
@@ -535,13 +534,11 @@ def align_esmc_to_structure(
     may have missing residues or unresolved residues. This function supports:
         - Exact length match (no alignment needed)
         - Contiguous substring match (terminal truncations only)
-        - res_id-based indexing for non-contiguous gaps (when structure_res_ids is provided)
 
     Args:
         esmc_emb: [L_esmc, 960] ESM-C embeddings.
         structure_res_names: List of residue names from the structure.
         fasta_seq: Original FASTA sequence (optional, for logging).
-        structure_res_ids: List of residue IDs from the structure (optional).
         subalign: Whether to perform subalignment if lengths mismatch (default: True).
     Returns:
         Aligned embeddings [N_res_structure, 960], or None if alignment fails.
@@ -557,7 +554,7 @@ def align_esmc_to_structure(
     if fasta_seq is not None and n_esmc_res == len(fasta_seq):
         struct_seq = get_sequence_from_residues(structure_res_names)
 
-        # Fast Path: Try to find structure sequence as a subsequence of FASTA sequence
+        # Try to find structure sequence as a subsequence of FASTA sequence
         # This handles cases where structure is missing terminal residues
         idx = fasta_seq.find(struct_seq)
         if idx >= 0:
@@ -569,55 +566,6 @@ def align_esmc_to_structure(
             else:
                 logger.warning("Subalignment disabled. Skipping alignment.")
                 return None
-
-        # Slow Path: use res_id-based indexing for non-contiguous gaps.
-        # After trim_terminal_tags, res_ids may not start at 1 if an N-terminal
-        # tag at position 1 was removed. Use min_rid as the offset.
-        if structure_res_ids is not None and subalign:
-            unique_res_ids = []
-            seen = set()
-            for rid in structure_res_ids:
-                rid_int = int(rid)
-                if rid_int not in seen:
-                    seen.add(rid_int)
-                    unique_res_ids.append(rid_int)
-
-            if len(unique_res_ids) != n_struct_res:
-                logger.warning(f"res_id count ({len(unique_res_ids)}) != structure residue count ({n_struct_res}). Skipping alignment.")
-                return None
-
-            max_rid = max(unique_res_ids)
-            min_rid = min(unique_res_ids)
-            if min_rid < 1 or (max_rid - min_rid) >= n_esmc_res:
-                logger.warning(
-                    f"res_id range [{min_rid}, {max_rid}] maps to indices "
-                    f"[0, {max_rid - min_rid}] which exceeds FASTA length "
-                    f"{n_esmc_res}. Skipping alignment."
-                )
-                return None
-
-            # Validate: spot-check that residue identities match
-            mismatches = 0
-            for i, rid in enumerate(unique_res_ids):
-                fasta_idx = rid - min_rid
-                if fasta_idx >= len(fasta_sequence):
-                    mismatches += 1
-                    continue
-                fasta_aa = fasta_sequence[fasta_idx]
-                struct_aa = AA3TO1.get(structure_residue_names[i], "X")
-                if struct_aa != "X" and fasta_aa != struct_aa:
-                    mismatches += 1
-
-            if mismatches > 0:
-                logger.warning(
-                    f"res_id alignment: {mismatches}/{n_struct_res} residue identity "
-                    f"mismatches between structure and FASTA. Skipping alignment."
-                )
-                return None
-
-            # Index ESM-C embeddings by res_id (offset by min_rid)
-            indices = torch.tensor([rid - min_rid for rid in unique_res_ids], dtype=torch.long)
-            return esmc_emb[indices]
 
     logger.warning(f"Structure has {n_struct_res} residues, ESM-C has {n_esmc_res}.")
     logger.warning("Alignment failed.")
