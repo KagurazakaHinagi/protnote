@@ -45,6 +45,8 @@ def calculate_f1_micro(total_tp_per_label, total_fn_per_label, total_fp_per_labe
     tp_micro = total_tp_per_label.sum()
     fn_micro = total_fn_per_label.sum()
     fp_micro = total_fp_per_label.sum()
+    precision_micro = tp_micro / (tp_micro + fp_micro + 1e-8)
+    recall_micro = tp_micro / (tp_micro + fn_micro + 1e-8)
     f1_micro = 2 * (precision_micro * recall_micro) / (precision_micro + recall_micro + 1e-8)
     return f1_micro
 
@@ -875,8 +877,7 @@ class ProtNoteTrainer:
 
         if self.is_master:
             self.logger.info(f"Restoring model to best validation {val_optimization_metric_name}...")
-                f"Restoring model to best validation {val_optimization_metric_name}..."
-            )
+
             load_model(
                 trainer=self,
                 rank=self.rank,

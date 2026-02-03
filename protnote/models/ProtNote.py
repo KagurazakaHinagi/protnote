@@ -71,6 +71,8 @@ class ProtNote(nn.Module):
         self.residual_connection = residual_connection
 
         # Projection heads
+        self.W_p = MLP(
+            protein_embedding_dim,
             [latent_dim * projection_head_hidden_dim_scale_factor] * (projection_head_num_layers - 1) + [latent_dim],
             bias=False,
             norm_layer=torch.nn.BatchNorm1d,
