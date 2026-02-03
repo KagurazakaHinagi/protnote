@@ -97,7 +97,7 @@ def _process_one(seq_id: str) -> dict:
         atom_array = ctx["parse_structure"](cif_path)
 
         # Filter out amino-acid Atoms with corresponding chain
-        atom_array = ctx["extract_aa_residue_by_chain_ids"](atom_array, struct_info["chain_ids"])
+        atom_array = ctx["extract_aa_residue_by_chain_ids"](atom_array, struct_info.get("chain_ids", "A"))
 
         if atom_array.array_length() == 0:
             return {"seq_id": seq_id, "status": "failed", "reason": "empty_structure"}
@@ -108,7 +108,7 @@ def _process_one(seq_id: str) -> dict:
             atom_array, n_trim_n, n_trim_c = ctx["trim_terminal_tags"](atom_array, fasta_seq)
 
         # Build atom graph
-        graph = ctx["build_atom_graph"](atom_array, chains=struct_info["chain_ids"], k=ctx["knn_k"])
+        graph = ctx["build_atom_graph"](atom_array, chains=struct_info.get("chain_ids", "A"), k=ctx["knn_k"])
 
         # Load ESM-C embeddings
         esmc_filename = ctx["esmc_index"][seq_id]
