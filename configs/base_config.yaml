@@ -188,7 +188,7 @@ paths:
         PROCESSED_GRAPH_DIR: processed/
         PROCESSED_GRAPH_INDEX_PATH: processed/index.json
 
-        TEMP_FASTA: new/protnote_expr.fasta
+        TEMP_FASTA: swissprot/new/protnote_expr.fasta
 
     # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
     output_paths:
