@@ -145,12 +145,15 @@ def parse_structure(cif_path: PathLike):
     result = parse(
         filename=cif_path,
         hydrogen_policy="remove",
+        extra_fields=["auth_asym_id"],
     )
 
-    # By default, use the first assembly (most likely quaternary structure) with the first model
-    # See https://pdb101.rcsb.org/learn/guide-to-understanding-pdb-data/biological-assemblies
-    # atom_array = result["assemblies"]["1"][0]
     atom_array = result["asym_unit"][0]
+
+    # Replace label chain IDs with author chain IDs if available
+    # to match the chain ID info in UniProt.
+    if hasattr(atom_array, "auth_asym_id"):
+        atom_array.chain_id = atom_array.auth_asym_id
 
     # Impute NaN coordinates instead of discarding them to preserve sequence contiguity
     atom_array, stats = _impute_nan_coords(atom_array)
