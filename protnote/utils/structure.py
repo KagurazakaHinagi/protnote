@@ -7,13 +7,15 @@ import logging
 from os import PathLike
 from pathlib import Path
 
+import atomworks
 import atomworks.constants as awconst
 import atomworks.io as awio
 import biotite.structure as bs
 import numpy as np
 import numpy.typing as npt
 import torch
-from atomworks.io.parser import parse
+from atomworks.io.parser import parse_atom_array
+from atomworks.io.utils.io_utils import load_any
 from atomworks.ml.utils.token import get_token_starts
 from scipy.spatial import KDTree
 
@@ -142,18 +144,19 @@ def parse_structure(cif_path: PathLike):
         Biotite AtomArray with cleaned atom data and bonds.
     """
 
-    result = parse(
-        filename=cif_path,
-        hydrogen_policy="remove",
-        extra_fields=["auth_asym_id"],
-    )
-
-    atom_array = result["asym_unit"][0]
+    raw_atom_array = load_any(cif_path, extra_fields=["auth_asym_id"])
 
     # Replace label chain IDs with author chain IDs if available
     # to match the chain ID info in UniProt.
-    if hasattr(atom_array, "auth_asym_id"):
-        atom_array.chain_id = atom_array.auth_asym_id
+    if hasattr(raw_atom_array, "auth_asym_id"):
+        raw_atom_array.chain_id = raw_atom_array.auth_asym_id
+
+    parsed_result = parse_atom_array(
+        raw_atom_array,
+        hydrogen_policy="remove",
+    )
+
+    atom_array = parsed_result["asym_unit"][0]
 
     # Impute NaN coordinates instead of discarding them to preserve sequence contiguity
     atom_array, stats = _impute_nan_coords(atom_array)
