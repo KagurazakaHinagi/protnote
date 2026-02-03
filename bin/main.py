@@ -9,11 +9,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import AutoModel, AutoTokenizer
 
 import wandb
+from protnote.data.collators import collate_structure_batch
 from protnote.data.datasets import (
     ProteinDataset,
+    StructureProteinDataset,
     calculate_sequence_weights,
     create_multiple_loaders,
 )
+from protnote.models.hybrid_encoders import HybridProteinEncoder
 from protnote.models.protein_encoders import ProteInfer
 from protnote.models.ProtNote import ProtNote
 from protnote.models.ProtNoteTrainer import ProtNoteTrainer
@@ -166,6 +169,10 @@ def main():
         "--save-val-test-metrics-file", help="json file name to append val/test metrics", type=str, default="val_test_metrics.json"
     )
 
+    parser.add_argument(
+        "--use-hybrid-encoder", action="store_true", default=False, help="Use hybrid ESM-C + EGNN encoder instead of ProteInfer CNN."
+    )
+
     args = parser.parse_args()
     validate_arguments(args, parser)
 
@@ -263,42 +270,54 @@ def train_validate_test(gpu, args):
         raise NotImplementedError("Gradient checkpointing is not yet implemented.")
 
     # ---------------------- DATASETS ----------------------#
+    # Load graph index if using hybrid encoder
+    use_hybrid = args.use_hybrid_encoder
+    graph_index = {}
+    graph_dir = None
+    graph_archive_path = None
+    if use_hybrid:
+        graph_dir = paths.get("PROCESSED_GRAPH_DIR", "")
+        graph_index_path = paths.get("GRAPH_INDEX_PATH", "")
+        if os.path.exists(graph_index_path):
+            import json as _json
+
+            with open(graph_index_path) as f:
+                graph_index = _json.load(f)
+            logger.info(f"Loaded graph index with {len(graph_index)} entries from {graph_index_path}")
+        else:
+            logger.warning(f"Graph index not found at {graph_index_path}. Structure data will use fallbacks.")
+
+        # Detect archive file
+        graph_archive_path = paths.get("GRAPH_ARCHIVE_PATH", "")
+        if not graph_archive_path or not os.path.exists(graph_archive_path):
+            default_archive = os.path.join(graph_dir, "graphs.pngrph") if graph_dir else ""
+            graph_archive_path = default_archive if os.path.exists(default_archive) else None
+        if graph_archive_path:
+            logger.info(f"Using graph archive: {graph_archive_path}")
+
+    # Select dataset class
+    DatasetClass = StructureProteinDataset if use_hybrid else ProteinDataset
+
+    def _make_dataset(data_paths, require_label_idxs):
+        kwargs = dict(
+            data_paths=data_paths,
+            config=config,
+            logger=logger,
+            require_label_idxs=require_label_idxs,
+            label_tokenizer=label_tokenizer,
+        )
+        if use_hybrid:
+            kwargs["graph_dir"] = graph_dir
+            kwargs["graph_index"] = graph_index
+            kwargs["graph_archive_path"] = graph_archive_path
+        return DatasetClass(**kwargs)
+
     # Create individual datasets
-    train_dataset = (
-        ProteinDataset(
-            data_paths=config["dataset_paths"]["train"][0],
-            config=config,
-            logger=logger,
-            require_label_idxs=params["GRID_SAMPLER"],
-            label_tokenizer=label_tokenizer,
-        )
-        if args.train_path_name is not None
-        else None
-    )
+    train_dataset = _make_dataset(config["dataset_paths"]["train"][0], params["GRID_SAMPLER"]) if args.train_path_name is not None else None
 
-    validation_dataset = (
-        ProteinDataset(
-            data_paths=config["dataset_paths"]["validation"][0],
-            config=config,
-            logger=logger,
-            require_label_idxs=False,  # Label indices are not required for validation.
-            label_tokenizer=label_tokenizer,
-        )
-        if args.validation_path_name is not None
-        else None
-    )
+    validation_dataset = _make_dataset(config["dataset_paths"]["validation"][0], False) if args.validation_path_name is not None else None
 
-    test_dataset = (
-        ProteinDataset(
-            data_paths=config["dataset_paths"]["test"][0],
-            config=config,
-            logger=logger,
-            require_label_idxs=False,  # Label indices are not required for testing
-            label_tokenizer=label_tokenizer,
-        )
-        if args.test_paths_names is not None
-        else None
-    )
+    test_dataset = _make_dataset(config["dataset_paths"]["test"][0], False) if args.test_paths_names is not None else None
 
     # Add datasets to a dictionary
     # TODO: This does not support multiple datasets. But I think we should remove that support anyway. Too complicated.
@@ -357,6 +376,7 @@ def train_validate_test(gpu, args):
         world_size=args.world_size,
         rank=rank,
         sequence_weights=sequence_weights,
+        collate_fn_override=collate_structure_batch if use_hybrid else None,
     )
 
     # Initialize ProteInfer
@@ -384,6 +404,51 @@ def train_validate_test(gpu, args):
             bottleneck_factor=config["embed_sequences_params"]["BOTTLENECK_FACTOR"],
         )
 
+    # Initialize protein encoder (ProteInfer or Hybrid)
+    sequence_encoder = None
+    hybrid_encoder = None
+    encoder_type = "proteinfer"
+
+    if use_hybrid:
+        encoder_type = "hybrid"
+        use_plm = params.get("USE_PLM_EMBEDDINGS", True)
+        hybrid_encoder = HybridProteinEncoder(
+            esmc_embedding_dim=params.get("ESMC_EMBEDDING_DIM", 960),
+            atom_type_dim=37,
+            egnn_hidden_dim=params.get("EGNN_HIDDEN_DIM", 256),
+            egnn_out_dim=params.get("EGNN_OUT_DIM", 256),
+            egnn_n_layers=params.get("EGNN_N_LAYERS", 4),
+            output_dim=params["PROTEIN_EMBEDDING_DIM"],
+            use_plm=use_plm,
+            learned_aa_embedding_dim=params.get("LEARNED_AA_EMBEDDING_DIM", 128),
+        )
+        plm_mode = "ESM-C" if use_plm else f"learned AA embedding (dim={params.get('LEARNED_AA_EMBEDDING_DIM', 128)})"
+        logger.info(f"Using hybrid encoder: {plm_mode} + EGNN (output_dim={params['PROTEIN_EMBEDDING_DIM']})")
+    else:
+        if params["PRETRAINED_SEQUENCE_ENCODER"] & (args.model_file is None):
+            sequence_encoder = ProteInfer.from_pretrained(
+                weights_path=paths[f"PROTEINFER_{task}_WEIGHTS_PATH"],
+                num_labels=config["embed_sequences_params"]["PROTEINFER_NUM_GO_LABELS"],
+                input_channels=config["embed_sequences_params"]["INPUT_CHANNELS"],
+                output_channels=config["embed_sequences_params"]["OUTPUT_CHANNELS"],
+                kernel_size=config["embed_sequences_params"]["KERNEL_SIZE"],
+                activation=torch.nn.ReLU,
+                dilation_base=config["embed_sequences_params"]["DILATION_BASE"],
+                num_resnet_blocks=config["embed_sequences_params"]["NUM_RESNET_BLOCKS"],
+                bottleneck_factor=config["embed_sequences_params"]["BOTTLENECK_FACTOR"],
+            )
+        else:
+            sequence_encoder = ProteInfer(
+                num_labels=config["embed_sequences_params"]["PROTEINFER_NUM_GO_LABELS"],
+                input_channels=config["embed_sequences_params"]["INPUT_CHANNELS"],
+                output_channels=config["embed_sequences_params"]["OUTPUT_CHANNELS"],
+                kernel_size=config["embed_sequences_params"]["KERNEL_SIZE"],
+                activation=torch.nn.ReLU,
+                dilation_base=config["embed_sequences_params"]["DILATION_BASE"],
+                num_resnet_blocks=config["embed_sequences_params"]["NUM_RESNET_BLOCKS"],
+                bottleneck_factor=config["embed_sequences_params"]["BOTTLENECK_FACTOR"],
+            )
+
     model = ProtNote(
         # Parameters
         protein_embedding_dim=params["PROTEIN_EMBEDDING_DIM"],
@@ -396,6 +461,8 @@ def train_validate_test(gpu, args):
         # Encoders
         label_encoder=label_encoder,
         sequence_encoder=sequence_encoder,
+        hybrid_encoder=hybrid_encoder,
+        encoder_type=encoder_type,
         inference_descriptions_per_label=len(params["INFERENCE_GO_DESCRIPTIONS"].split("+")),
         # Output Layer
         output_mlp_hidden_dim_scale_factor=params["OUTPUT_MLP_HIDDEN_DIM_SCALE_FACTOR"],
