@@ -1,19 +1,35 @@
-import torch
+"""
+ProteinDataset class for protein sequences with GO annotations.
+
+StructureProteinDataset extended class for ProteinDataset with structure data loading for
+the hybrid ESM-C + EGNN encoder.
+"""
+
 import logging
+import os
 import random
-from collections import defaultdict
-from joblib import Parallel, delayed, cpu_count
+from collections import Counter, defaultdict
 from functools import partial
-from collections import Counter
 from typing import List
-import pandas as pd
-import numpy as np
+
 import blosum as bl
-from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import pandas as pd
+import torch
+from joblib import Parallel, cpu_count, delayed
+from torch.utils.data import DataLoader, Dataset
+
 from protnote.data.collators import collate_variable_sequence_length
-from protnote.utils.data import read_fasta, get_vocab_mappings, save_to_fasta
 from protnote.data.samplers import GridBatchSampler, observation_sampler_factory
-from protnote.utils.data import generate_vocabularies
+from protnote.utils.data import (
+    generate_vocabularies,
+    get_vocab_mappings,
+    read_fasta,
+    save_to_fasta,
+)
+
+# Standard 20 amino acids mapping (1-indexed, 0 reserved for unknown/padding)
+AA_TO_INDEX = {aa: i + 1 for i, aa in enumerate("ACDEFGHIKLMNPQRSTVWY")}
 
 
 class ProteinDataset(Dataset):
@@ -57,21 +73,14 @@ class ProteinDataset(Dataset):
         self.data_path = data_paths["data_path"]
 
         # Initialize data augmentation parameters
-        self.augment_residue_probability = config["params"][
-            "AUGMENT_RESIDUE_PROBABILITY"
-        ]
-        self.label_augmentation_descriptions = config["params"][
-            "LABEL_AUGMENTATION_DESCRIPTIONS"
-        ].split("+")
+        self.augment_residue_probability = config["params"]["AUGMENT_RESIDUE_PROBABILITY"]
+        self.label_augmentation_descriptions = config["params"]["LABEL_AUGMENTATION_DESCRIPTIONS"].split("+")
 
         # Load the BLOSUM62 matrix and convert to defaultdict using dictionary comprehension
         blosum62 = bl.BLOSUM(62)
         self.blosum62 = defaultdict(
             dict,
-            {
-                aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62.keys()}
-                for aa1 in blosum62.keys()
-            },
+            {aa1: {aa2: blosum62[aa1][aa2] for aa2 in blosum62.keys()} for aa1 in blosum62.keys()},
         )
 
         # Initialize class variables and pre-computed embedding matrices
@@ -81,27 +90,17 @@ class ProteinDataset(Dataset):
         self.require_label_idxs = require_label_idxs
 
         # Subset the data if subset_fraction is provided
-        subset_fraction = config["params"][
-            f"{self.dataset_type.upper()}_SUBSET_FRACTION"
-        ]
+        subset_fraction = config["params"][f"{self.dataset_type.upper()}_SUBSET_FRACTION"]
         if subset_fraction < 1.0:
-            logging.info(
-                f"Subsetting {subset_fraction*100}% of the {self.dataset_type} set..."
-            )
+            logging.info(f"Subsetting {subset_fraction * 100}% of the {self.dataset_type} set...")
             self.data = self.data[: int(subset_fraction * len(self.data))]
 
         # Define description types used for inference. Can be 1 or more. If more than 1, then predictions
         # will be ensembled per go term
-        self.inference_go_descriptions = config["params"][
-            "INFERENCE_GO_DESCRIPTIONS"
-        ].split("+")
+        self.inference_go_descriptions = config["params"]["INFERENCE_GO_DESCRIPTIONS"].split("+")
 
         extract_vocabularies_from = config["params"]["EXTRACT_VOCABULARIES_FROM"]
-        vocabulary_path = (
-            config["paths"][extract_vocabularies_from]
-            if extract_vocabularies_from is not None
-            else self.data_path
-        )
+        vocabulary_path = config["paths"][extract_vocabularies_from] if extract_vocabularies_from is not None else self.data_path
 
         # Preprocess dataset
         self.label_frequency = None
@@ -113,18 +112,14 @@ class ProteinDataset(Dataset):
 
         # TODO: This path could be constructed in get_setup
         INDEX_OUTPUT_PATH = config["LABEL_EMBEDDING_PATH"].split(".")
-        INDEX_OUTPUT_PATH = (
-            "_".join([INDEX_OUTPUT_PATH[0], "index"]) + "." + INDEX_OUTPUT_PATH[1]
-        )
+        INDEX_OUTPUT_PATH = "_".join([INDEX_OUTPUT_PATH[0], "index"]) + "." + INDEX_OUTPUT_PATH[1]
         index_mapping = torch.load(INDEX_OUTPUT_PATH)
         (
             self.label_embeddings_index,
             self.label_embeddings,
             self.label_token_counts,
             self.label_descriptions,
-        ) = self._process_label_embedding_mapping(
-            mapping=index_mapping, embeddings=torch.load(config["LABEL_EMBEDDING_PATH"])
-        )
+        ) = self._process_label_embedding_mapping(mapping=index_mapping, embeddings=torch.load(config["LABEL_EMBEDDING_PATH"]))
 
         (
             self.sorted_label_embeddings,
@@ -135,9 +130,7 @@ class ProteinDataset(Dataset):
             len(self.label_embeddings_index),
         )
         logging.info("Total number of label embeddings: %s", len(self.label_embeddings))
-        logging.info(
-            "Total number of label token counts: %s", len(self.label_token_counts)
-        )
+        logging.info("Total number of label token counts: %s", len(self.label_token_counts))
 
     def _preprocess_data(self, deduplicate, max_sequence_length, vocabulary_path):
         """
@@ -154,18 +147,14 @@ class ProteinDataset(Dataset):
 
             # Log the number of duplicate sequences removed
             num_duplicates = len(self.data) - len(df)
-            logging.info(
-                f"Removing {num_duplicates} duplicate sequences from {self.data_path}..."
-            )
+            logging.info(f"Removing {num_duplicates} duplicate sequences from {self.data_path}...")
 
         # In train, remove sequences longer than max_sequence_length
         if (max_sequence_length is not None) & (self.dataset_type == "train"):
             seq_length_mask = df["sequence"].apply(len) <= max_sequence_length
             num_long_sequences = (~seq_length_mask).sum()
             df = df[seq_length_mask]
-            logging.info(
-                f"Removing {num_long_sequences} sequences longer than {max_sequence_length} from {self.data_path}..."
-            )
+            logging.info(f"Removing {num_long_sequences} sequences longer than {max_sequence_length} from {self.data_path}...")
 
         # Convert the DataFrame back to the list of tuples format
         self.data = list(df.itertuples(index=False, name=None))
@@ -176,9 +165,7 @@ class ProteinDataset(Dataset):
         # Set the vocabularies.
         # If extract_vocabularies is null, generate vocab from self.data
 
-        logging.info(
-            f"Extracting vocabularies for {self.dataset_type} from {vocabulary_path}"
-        )
+        logging.info(f"Extracting vocabularies for {self.dataset_type} from {vocabulary_path}")
         vocabularies = generate_vocabularies(data=self.data)
 
         self.amino_acid_vocabulary = vocabularies["amino_acid_vocab"]
@@ -186,9 +173,7 @@ class ProteinDataset(Dataset):
         self.sequence_id_vocabulary = vocabularies["sequence_id_vocab"]
 
         # Save mask of represented vocab
-        self.represented_vocabulary_mask = [
-            label in self.label_frequency for label in self.label_vocabulary
-        ]
+        self.represented_vocabulary_mask = [label in self.label_frequency for label in self.label_vocabulary]
 
         self._process_vocab()
 
@@ -199,17 +184,13 @@ class ProteinDataset(Dataset):
         self._process_sequence_id_vocab()
 
     def _process_amino_acid_vocab(self):
-        self.aminoacid2int, self.int2aminoacid = get_vocab_mappings(
-            self.amino_acid_vocabulary
-        )
+        self.aminoacid2int, self.int2aminoacid = get_vocab_mappings(self.amino_acid_vocabulary)
 
     def _process_label_vocab(self):
         self.label2int, self.int2label = get_vocab_mappings(self.label_vocabulary)
 
     def _process_sequence_id_vocab(self):
-        self.sequence_id2int, self.int2sequence_id = get_vocab_mappings(
-            self.sequence_id_vocabulary
-        )
+        self.sequence_id2int, self.int2sequence_id = get_vocab_mappings(self.sequence_id_vocabulary)
 
     def __len__(self) -> int:
         return len(self.data)
@@ -225,11 +206,7 @@ class ProteinDataset(Dataset):
         """
         # Get the substitutions for the amino acid, ensuring only amino acids within the vocabulary are considered
         substitutions = self.blosum62[amino_acid]
-        substitutions = {
-            aa: score
-            for aa, score in substitutions.items()
-            if aa in self.amino_acid_vocabulary
-        }
+        substitutions = {aa: score for aa, score in substitutions.items() if aa in self.amino_acid_vocabulary}
         amino_acids, scores = zip(*substitutions.items())
 
         # Use only non-negative scodes
@@ -266,24 +243,14 @@ class ProteinDataset(Dataset):
 
         return augmented_sequence
 
-    def _process_label_embedding_mapping(
-        self, mapping: pd.DataFrame, embeddings: torch.Tensor
-    ):
-        assert set(self.inference_go_descriptions).issubset(
-            set(["name", "label"])
-        ), """only supporting name, label or name+label"""
+    def _process_label_embedding_mapping(self, mapping: pd.DataFrame, embeddings: torch.Tensor):
+        assert set(self.inference_go_descriptions).issubset(set(["name", "label"])), """only supporting name, label or name+label"""
 
         self.logger.info("Processing label embeddings...")
-        descriptions_considered = (
-            self.label_augmentation_descriptions
-            if self.dataset_type == "train"
-            else self.inference_go_descriptions
-        )
+        descriptions_considered = self.label_augmentation_descriptions if self.dataset_type == "train" else self.inference_go_descriptions
 
         # Select only desired description types and ids from label vocabulary
-        mask = (mapping["description_type"].isin(descriptions_considered)) & (
-            mapping["id"].isin(self.label_vocabulary)
-        ).values
+        mask = (mapping["description_type"].isin(descriptions_considered)) & (mapping["id"].isin(self.label_vocabulary)).values
         mapping = mapping[mask]
         embeddings = embeddings[mask]
 
@@ -299,11 +266,7 @@ class ProteinDataset(Dataset):
         descriptions = mapping["description"].values
 
         # And filtering the tensor as well.
-        mapping = (
-            mapping.groupby("id")
-            .agg(min_idx=("index", "min"), max_idx=("index", "max"))
-            .to_dict(orient="index")
-        )
+        mapping = mapping.groupby("id").agg(min_idx=("index", "min"), max_idx=("index", "max")).to_dict(orient="index")
 
         self.logger.info("Done")
         return mapping, embeddings, token_counts, descriptions
@@ -350,9 +313,7 @@ class ProteinDataset(Dataset):
         label_idxs: list[int] = None,
     ) -> dict:
         # One-hot encode the labels for use in the loss function (not a model input, so should not be impacted by augmentation)
-        labels_ints = torch.tensor(
-            [self.label2int[label] for label in labels], dtype=torch.long
-        )
+        labels_ints = torch.tensor([self.label2int[label] for label in labels], dtype=torch.long)
 
         # If training, augment the sequence with probability defined in the config
         if self.dataset_type == "train":
@@ -361,30 +322,21 @@ class ProteinDataset(Dataset):
                 sequence = self._augment_sequence(sequence)
 
         # Convert the sequence and labels to integers for one-hot encoding (impacted by augmentation)
-        amino_acid_ints = torch.tensor(
-            [self.aminoacid2int[aa] for aa in sequence], dtype=torch.long
-        )
+        amino_acid_ints = torch.tensor([self.aminoacid2int[aa] for aa in sequence], dtype=torch.long)
 
         # Get the length of the sequence
         sequence_length = torch.tensor(len(amino_acid_ints))
 
         # Get multi-hot encoding of sequence and labels
-        sequence_onehots = torch.nn.functional.one_hot(
-            amino_acid_ints, num_classes=len(self.amino_acid_vocabulary)
-        ).permute(1, 0)
-        label_multihots = torch.nn.functional.one_hot(
-            labels_ints, num_classes=len(self.label_vocabulary)
-        ).sum(dim=0)
+        sequence_onehots = torch.nn.functional.one_hot(amino_acid_ints, num_classes=len(self.amino_acid_vocabulary)).permute(1, 0)
+        label_multihots = torch.nn.functional.one_hot(labels_ints, num_classes=len(self.label_vocabulary)).sum(dim=0)
 
         if label_idxs is not None:
             label_idxs = torch.tensor(label_idxs)
 
         # Augment label descriptions by sampling from synonyms (if available)
         # NOTE: WE AUGMENT LABELS PER SEQUENCE, BUT INSIDE COLLATOR ONLY USE THE LABELS FROM FIRST SEQUENCE IN BATCh
-        if (
-            self.dataset_type == "train"
-            and len(self.label_augmentation_descriptions) > 1
-        ):
+        if self.dataset_type == "train" and len(self.label_augmentation_descriptions) > 1:
             # Use the augmentation pipeline, which is O(n) where n is the number of labels
             label_embeddings, label_token_counts = self._sample_label_embeddings()
         else:
@@ -408,13 +360,11 @@ class ProteinDataset(Dataset):
             "label_token_counts": torch.tensor(label_token_counts),
         }
 
-    def __getitem__(self, idx) -> tuple:
+    def __getitem__(self, idx):
         if self.require_label_idxs:
             # For Grid sampler, idx is a tuple of (sequence_idx, label_idxs)
             sequence_idx, label_idxs = idx[0], idx[1]
-            sequence, sequence_id, labels = self.data[
-                sequence_idx
-            ]  # We throw away sequence_id
+            sequence, sequence_id, labels = self.data[sequence_idx]  # We throw away sequence_id
         else:
             # Otherwise, idx is just the sequence index
             label_idxs = None
@@ -438,10 +388,7 @@ class ProteinDataset(Dataset):
 
         chunk_size = len(self.data) // cpu_count()  # Adjust chunk size if necessary.
 
-        results = Parallel(n_jobs=-1)(
-            delayed(count_labels)(self.data[i : i + chunk_size])
-            for i in range(0, len(self.data), chunk_size)
-        )
+        results = Parallel(n_jobs=-1)(delayed(count_labels)(self.data[i : i + chunk_size]) for i in range(0, len(self.data), chunk_size))
 
         num_positive_labels = sum(res[0] for res in results)
         num_negative_labels = sum(res[1] for res in results)
@@ -463,14 +410,10 @@ class ProteinDataset(Dataset):
             # Update the instance's label frequency with the calculated frequencies
             self.label_frequency = label_freq
 
-    def calculate_label_weights(
-        self, inv_freq=True, power=0.3, normalize=True, return_list=False
-    ):
+    def calculate_label_weights(self, inv_freq=True, power=0.3, normalize=True, return_list=False):
         self.logger.info("Calculating label weights...")
 
-        assert (
-            self.label_frequency is not None
-        ), "Must call calculate_label_frequency first"
+        assert self.label_frequency is not None, "Must call calculate_label_frequency first"
 
         label_weights = self.label_frequency.copy()
 
@@ -483,24 +426,18 @@ class ProteinDataset(Dataset):
         # When power = 1, normalization is redundant b/c i'm already calcualtating label weighrs with "total" for frequency, rather than total_per_label. This already gives proper distribution
         if normalize:
             sum_raw_weights = sum(label_weights.values())
-            label_weights = {
-                k: v * num_labels / sum_raw_weights for k, v in label_weights.items()
-            }
+            label_weights = {k: v * num_labels / sum_raw_weights for k, v in label_weights.items()}
 
         # Complete weights with labels not seen in training set but in vocab
         label_weights = {self.label2int[k]: v for k, v in label_weights.items()}
-        missing_label_weights = {
-            v: 0 for v in self.label2int.values() if v not in label_weights
-        }
+        missing_label_weights = {v: 0 for v in self.label2int.values() if v not in label_weights}
         label_weights.update(missing_label_weights)
 
         self.logger.info(f"# always negative labels: {len(missing_label_weights)}")
 
         if return_list:
             # Sort weights by vocabulary order
-            label_weights = torch.tensor(
-                [value for _, value in sorted(label_weights.items())]
-            ).float()
+            label_weights = torch.tensor([value for _, value in sorted(label_weights.items())]).float()
         else:
             label_weights = {self.int2label[k]: v for k, v in label_weights.items()}
 
@@ -525,9 +462,7 @@ def calculate_sequence_weights(data: list, label_inv_freq: dict, aggregation: st
     sequence_weights = []
     for _, _, labels in data:
         labels = labels[1:]  # Assuming the first element is not a label
-        sequence_weight = pd.Series(
-            [label_inv_freq.get(label, 0) for label in labels]
-        ).agg(aggregation)
+        sequence_weight = pd.Series([label_inv_freq.get(label, 0) for label in labels]).agg(aggregation)
         sequence_weights.append(sequence_weight)
     return sequence_weights
 
@@ -556,9 +491,9 @@ def set_padding_to_sentinel(
     device = padded_representations.device
 
     # Create a mask that identifies padding, ensuring it's on the same device
-    mask = torch.arange(max_sequence_length, device=device).expand(
-        batch_size, max_sequence_length
-    ) >= sequence_lengths.unsqueeze(1).to(device)
+    mask = torch.arange(max_sequence_length, device=device).expand(batch_size, max_sequence_length) >= sequence_lengths.unsqueeze(1).to(
+        device
+    )
 
     # Expand the mask to cover the 'dim' dimension
     mask = mask.unsqueeze(1).expand(-1, dim, -1)
@@ -581,6 +516,7 @@ def create_multiple_loaders(
     world_size: int = 1,
     rank: int = 0,
     sequence_weights: torch.Tensor = None,
+    collate_fn_override=None,
 ) -> List[DataLoader]:
     loaders = defaultdict(list)
     for dataset_type, dataset_list in datasets.items():
@@ -607,9 +543,7 @@ def create_multiple_loaders(
                 )
 
                 if grid_sampler:
-                    assert (
-                        label_sample_size is not None
-                    ), "Provide label_sample_size when using grid sampler"
+                    assert label_sample_size is not None, "Provide label_sample_size when using grid sampler"
                     batch_sampler = GridBatchSampler(
                         observation_sampler=sequence_sampler,
                         observations_batch_size=batch_size_for_type,
@@ -636,12 +570,13 @@ def create_multiple_loaders(
                 )
                 drop_last = False
 
+            collate_base = collate_fn_override if collate_fn_override is not None else collate_variable_sequence_length
             loader = DataLoader(
                 dataset,
                 batch_size=batch_size_for_type,
                 shuffle=False,
                 collate_fn=partial(
-                    collate_variable_sequence_length,
+                    collate_base,
                     label_sample_size=label_sample_size,
                     grid_sampler=grid_sampler & (dataset_type == "train"),
                     shuffle_labels=shuffle_labels,
@@ -659,3 +594,125 @@ def create_multiple_loaders(
             loaders[dataset_type].append(loader)
 
     return loaders
+
+
+class StructureProteinDataset(ProteinDataset):
+    """ProteinDataset extended with pre-processed structure graph data.
+
+    Each item returns the standard ProteinDataset fields plus:
+    - atom_coords: [N_atoms, 3] atom 3D coordinates
+    - atom_types: [N_atoms, atom_type_dim] atom-type one-hot vectors
+    - atom_to_residue: [N_atoms] residue index for each atom
+    - esmc_embeddings: [N_atoms, esmc_dim] ESM-C embeddings broadcast to atoms
+    - residue_indices: [N_atoms] amino acid index per atom (1-indexed, 0=unknown)
+    - edge_index: [2, N_edges] k-NN graph edges
+    - num_residues: int
+    - num_atoms: int
+    - sequence_str: raw amino acid sequence string
+
+    Args:
+        graph_dir: Directory containing pre-processed .pt graph files
+        graph_index_path: Path to graph_index.json mapping sequence_id -> filename
+        **kwargs: All arguments passed to ProteinDataset
+    """
+
+    def __init__(
+        self,
+        graph_dir,
+        graph_index,
+        graph_archive_path=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.graph_dir = graph_dir
+        self.graph_index = graph_index  # dict: sequence_id -> filename
+        self.graph_archive_path = graph_archive_path
+        self._archive_reader = None  # lazy init for DataLoader spawn safety
+
+        # Log coverage
+        data_ids = {item[1] for item in self.data}
+        available = set(self.graph_index.keys())
+        covered = data_ids & available
+        missing = data_ids - available
+        logging.info(
+            f"Structure coverage: {len(covered)}/{len(data_ids)} sequences have graphs ({len(missing)} missing, will use virtual atoms)"
+        )
+
+    def _get_archive_reader(self):
+        """Lazily initialize the archive reader on first access."""
+        if self._archive_reader is None and self.graph_archive_path:
+            from protnote.utils.graph_archive import GraphArchiveReader
+
+            self._archive_reader = GraphArchiveReader(self.graph_archive_path)
+        return self._archive_reader
+
+    def _load_graph(self, sequence_id, sequence):
+        """Load pre-processed graph data for a protein.
+
+        Returns a dict with atom_coords, atom_types, atom_to_residue,
+        esmc_embeddings, edge_index, num_residues, num_atoms.
+
+        If no graph is available, creates a fallback with one virtual atom
+        per residue at the origin.
+        """
+        # Try archive first
+        reader = self._get_archive_reader()
+        if reader is not None and sequence_id in reader:
+            try:
+                return reader[sequence_id]
+            except Exception as e:
+                logging.warning(f"Failed to load graph for {sequence_id} from archive: {e}. Trying individual file.")
+
+        # Then try individual file
+        if sequence_id in self.graph_index:
+            graph_path = os.path.join(self.graph_dir, self.graph_index[sequence_id])
+            try:
+                graph_data = torch.load(graph_path, weights_only=False)
+                return graph_data
+            except Exception as e:
+                logging.warning(f"Failed to load graph for {sequence_id}: {e}. Using fallback.")
+
+        # Fallback: one virtual atom per residue, no edges
+        num_residues = len(sequence)
+        graph_data = {
+            "atom_coords": torch.zeros(num_residues, 3),
+            "atom_types": torch.zeros(num_residues, 37),  # Zero vectors (no atom type info)
+            "atom_to_residue": torch.arange(num_residues),
+            "esmc_embeddings": torch.zeros(num_residues, 960),  # Will be filled by collator/encoder
+            "edge_index": torch.zeros(2, 0, dtype=torch.long),  # No edges
+            "num_residues": num_residues,
+            "num_atoms": num_residues,
+        }
+        return graph_data
+
+    def __getitem__(self, idx):
+        # Get standard ProteinDataset item
+        if self.require_label_idxs:
+            sequence_idx, label_idxs = idx[0], idx[1]
+            sequence, sequence_id, labels = self.data[sequence_idx]
+        else:
+            label_idxs = None
+            sequence, sequence_id, labels = self.data[idx]
+
+        item = self.process_example(sequence, sequence_id, labels, label_idxs)
+
+        # Add structure data
+        graph_data = self._load_graph(sequence_id, sequence)
+        item["atom_coords"] = graph_data["atom_coords"]
+        item["atom_types"] = graph_data["atom_types"]
+        item["atom_to_residue"] = graph_data["atom_to_residue"]
+        item["esmc_embeddings"] = graph_data["esmc_embeddings"]
+        item["edge_index"] = graph_data["edge_index"]
+        item["num_residues"] = graph_data["num_residues"]
+        item["num_atoms"] = graph_data["num_atoms"]
+        item["sequence_str"] = sequence
+
+        # Build per-atom amino acid indices for vanilla (non-PLM) mode
+        # Map each atom to its parent residue's amino acid index (1-indexed)
+        atom_to_res = graph_data["atom_to_residue"]
+        per_residue_aa = torch.tensor([AA_TO_INDEX.get(aa, 0) for aa in sequence], dtype=torch.long)
+        # Clamp indices to valid range for sequences shorter/longer than graph
+        clamped_res = atom_to_res.clamp(max=len(sequence) - 1)
+        item["residue_indices"] = per_residue_aa[clamped_res]
+
+        return item
