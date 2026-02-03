@@ -133,6 +133,9 @@ def get_setup(
     # Extract the fixed ProteInfer params from the config file
     embed_sequences_params = config["embed_sequences_params"]
 
+    # Extract remote data URLs
+    remote_data_urls = config["remote_data"]
+
     # Prepend the correct path roots
     # Define root paths for each section
     section_paths = {
@@ -250,6 +253,7 @@ def get_setup(
         "DATA_PATH": DATA_PATH,
         "OUTPUT_PATH": OUTPUT_PATH,
         "LABEL_EMBEDDING_PATH": label_embedding_path,
+        "remote_data_urls": remote_data_urls,
     }
 
 

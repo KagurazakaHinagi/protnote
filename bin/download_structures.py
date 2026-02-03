@@ -38,7 +38,7 @@ def parse_alphafold_db_api(accession_id: str) -> tuple[str, ...] | None:
     Returns:
         tuple[str, ...] | None: A tuple containing the model entity ID, avg pLDDT, and CIF URL, or None if an error occurred.
     """
-    url = f"{CONFIG['paths']['database_urls']['ALPHAFOLD_DB_API']}/{accession_id}"
+    url = f"{CONFIG['paths']['remote_data_urls']['ALPHAFOLD_DB_API']}/{accession_id}"
     try:
         response = fetch_with_retries(url)
     except requests.exceptions.RequestException as e:
@@ -67,8 +67,8 @@ def download_pdb_structure(seq_id: str, pdb_id: str, output_dir: Path, override:
     if output_path.exists() and not override:
         return output_path
 
-    url = f"{CONFIG['paths']['database_urls']['RCSB_PDB_URL']}/{pdb_id.upper()}.cif"
-    fallback_url = f"{CONFIG['paths']['database_urls']['RCSB_PDB_URL']}/{pdb_id.upper()}.pdb"
+    url = f"{CONFIG['paths']['remote_data_urls']['RCSB_PDB_URL']}/{pdb_id.upper()}.cif"
+    fallback_url = f"{CONFIG['paths']['remote_data_urls']['RCSB_PDB_URL']}/{pdb_id.upper()}.pdb"
 
     try:
         response = fetch_with_retries(url)
