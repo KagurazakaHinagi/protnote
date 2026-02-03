@@ -675,13 +675,13 @@ class StructureProteinDataset(ProteinDataset):
         # Fallback: one virtual atom per residue, no edges
         num_residues = len(sequence)
         graph_data = {
-            "atom_coords": torch.zeros(num_residues, 3),
-            "atom_types": torch.zeros(num_residues, 37),  # Zero vectors (no atom type info)
-            "atom_to_residue": torch.arange(num_residues),
+            "coords": torch.zeros(num_residues, 3),
+            "atom_types": torch.zeros(num_residues, dtype=torch.long),  # Zero vectors (no atom type info)
+            "residue_index": torch.arange(num_residues),
             "esmc_embeddings": torch.zeros(num_residues, 960),  # Will be filled by collator/encoder
             "edge_index": torch.zeros(2, 0, dtype=torch.long),  # No edges
-            "num_residues": num_residues,
-            "num_atoms": num_residues,
+            "n_residues": num_residues,
+            "n_atoms": num_residues,
         }
         return graph_data
 
@@ -698,18 +698,18 @@ class StructureProteinDataset(ProteinDataset):
 
         # Add structure data
         graph_data = self._load_graph(sequence_id, sequence)
-        item["atom_coords"] = graph_data["atom_coords"]
+        item["atom_coords"] = graph_data.get("coords", graph_data.get("atom_coords"))
         item["atom_types"] = graph_data["atom_types"]
-        item["atom_to_residue"] = graph_data["atom_to_residue"]
+        item["atom_to_residue"] = graph_data.get("residue_index", graph_data.get("atom_to_residue"))
         item["esmc_embeddings"] = graph_data["esmc_embeddings"]
         item["edge_index"] = graph_data["edge_index"]
-        item["num_residues"] = graph_data["num_residues"]
-        item["num_atoms"] = graph_data["num_atoms"]
+        item["num_residues"] = graph_data.get("n_residues", graph_data.get("num_residues"))
+        item["num_atoms"] = graph_data.get("n_atoms", graph_data.get("num_atoms"))
         item["sequence_str"] = sequence
 
         # Build per-atom amino acid indices for vanilla (non-PLM) mode
         # Map each atom to its parent residue's amino acid index (1-indexed)
-        atom_to_res = graph_data["atom_to_residue"]
+        atom_to_res = graph_data.get("residue_index", graph_data.get("atom_to_residue"))
         per_residue_aa = torch.tensor([AA_TO_INDEX.get(aa, 0) for aa in sequence], dtype=torch.long)
         # Clamp indices to valid range for sequences shorter/longer than graph
         clamped_res = atom_to_res.clamp(max=len(sequence) - 1)

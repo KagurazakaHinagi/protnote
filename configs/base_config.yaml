@@ -186,7 +186,7 @@ paths:
 
         # Processed graph data
         PROCESSED_GRAPH_DIR: processed/
-        PROCESSED_GRAPH_INDEX_PATH: processed/index.json
+        GRAPH_INDEX_PATH: processed/graph_index.json
 
         TEMP_FASTA: swissprot/new/protnote_expr.fasta
 

@@ -207,7 +207,19 @@ def collate_structure_batch(
 
         all_atom_coords.append(item["atom_coords"])
         all_atom_types.append(item["atom_types"])
-        all_esmc_embeddings.append(item["esmc_embeddings"])
+
+        # Broadcast esmc_embeddings from per-residue [n_residues, D] to per-atom [n_atoms, D]
+        # using atom_to_residue as the index
+        esmc_emb = item["esmc_embeddings"]
+        atom_to_res = item["atom_to_residue"]
+        if esmc_emb.size(0) != n_atoms:
+            # Per-residue format: broadcast to atoms
+            esmc_emb_per_atom = esmc_emb[atom_to_res]
+        else:
+            # Already per-atom
+            esmc_emb_per_atom = esmc_emb
+        all_esmc_embeddings.append(esmc_emb_per_atom)
+
         if "residue_indices" in item:
             all_residue_indices.append(item["residue_indices"])
 

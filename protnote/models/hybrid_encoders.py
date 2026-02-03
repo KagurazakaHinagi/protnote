@@ -184,8 +184,14 @@ class HybridProteinEncoder(nn.Module):
                 raise ValueError("residue_indices required when use_plm=False. Ensure graph data includes per-atom amino acid indices.")
             seq_emb = self.aa_embedding(residue_indices)  # [N_atoms, learned_aa_embedding_dim]
 
+        # Convert atom_types to one-hot if needed (stored as indices for efficiency)
+        if atom_types.dim() == 1:
+            atom_types_onehot = F.one_hot(atom_types, num_classes=self.atom_type_dim).float()
+        else:
+            atom_types_onehot = atom_types.float()
+
         # Concatenate sequence embeddings with atom-type one-hot
-        h = torch.cat([seq_emb, atom_types], dim=-1)
+        h = torch.cat([seq_emb, atom_types_onehot], dim=-1)
 
         # Run through EGNN (coordinates kept in float32 internally)
         h = self.structure_encoder(h, atom_coords, edge_index)  # [N_atoms, egnn_out_dim]
