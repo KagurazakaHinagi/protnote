@@ -97,7 +97,7 @@ def main():
     #Create output path dir if it doesn't exist
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
-    INDEX_OUTPUT_PATH = OUTPUT_PATH.split(".")
+    INDEX_OUTPUT_PATH = OUTPUT_PATH.rsplit(".", 1)
     INDEX_OUTPUT_PATH = (
         "_".join([INDEX_OUTPUT_PATH[0], "index"]) + "." + INDEX_OUTPUT_PATH[1]
     )

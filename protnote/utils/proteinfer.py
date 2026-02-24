@@ -13,7 +13,7 @@ def transfer_tf_weights_to_torch(torch_model: torch.nn.Module, tf_weights_path: 
     temp = {}
     for tf_name, tf_param in tf_weights.items():
         temp[tf_name] = tf_param
-        if ("batch_normalization" in tf_name) & ("moving_variance" in tf_name):
+        if ("batch_normalization" in tf_name) and ("moving_variance" in tf_name):
             num_batches_name = "/".join(
                 tf_name.split("/")[:-1] + ["num_batches_tracked:0"]
             )
@@ -92,8 +92,9 @@ def normalize_confidences(predictions, label_vocab, applicable_label_dict):
     label_confidences = []
     for label in label_vocab:
         child_indices = np.array([vocab_indices[child] for child in children[label]])
-        if child_indices.size > 1:
-            confidences = np.max(predictions[:, child_indices], axis=1)
+        if child_indices.size > 0:
+            all_indices = np.append(child_indices, vocab_indices[label])
+            confidences = np.max(predictions[:, all_indices], axis=1)
             label_confidences.append(confidences)
         else:
             label_confidences.append(predictions[:, vocab_indices[label]])

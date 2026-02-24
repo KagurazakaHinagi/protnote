@@ -297,7 +297,7 @@ def collate_variable_sequence_length(
             if not distribute_labels:
                 # If not distributing labels, sample from entire dataset
                 sampled_label_indices = (
-                    torch.randperm(num_labels)[:label_sample_size] if shuffle_labels else torch.arange(label_sample_size)
+                    torch.randperm(num_labels)[:label_sample_size] if shuffle_labels else torch.arange(min(label_sample_size, num_labels))
                 )
             else:
                 # Otherwise, sample from the labels on this GPU
@@ -322,6 +322,7 @@ def collate_variable_sequence_length(
     if sampled_label_indices is not None:
         # Create a new tensor of embeddings with only the sampled labels
         processed_label_embeddings = label_embeddings[sampled_label_indices]
+        label_token_counts = label_token_counts[sampled_label_indices]
     # Otherwise, use the original label embeddings
     else:
         processed_label_embeddings = label_embeddings

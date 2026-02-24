@@ -193,16 +193,17 @@ class ProtNote(nn.Module):
                     self.label_encoder,
                     method=self.label_embedding_pooling_method,
                     batch_size_limit=self.label_batch_size_limit,
+                    requires_grad=True,
                 )
             else:
                 # Get label embeddings from tokens, without gradients
-                with torch.no_grad():
-                    L_f = get_label_embeddings(
-                        tokenized_labels,
-                        self.label_encoder,
-                        method=self.label_embedding_pooling_method,
-                        batch_size_limit=self.label_batch_size_limit,
-                    )
+                L_f = get_label_embeddings(
+                    tokenized_labels,
+                    self.label_encoder,
+                    method=self.label_embedding_pooling_method,
+                    batch_size_limit=self.label_batch_size_limit,
+                    requires_grad=False,
+                )
         else:
             raise ValueError("Incompatible label parameters passed to forward method.")
         # Noise the label embedding during training
@@ -282,10 +283,11 @@ class ProtNote(nn.Module):
                 logits = self.output_layer(joint_embeddings)
             else:
                 output_layer_embeddings = joint_embeddings
-                for i, layer in enumerate(self.output_layer):
-                    output_layer_embeddings = layer(output_layer_embeddings)
-                    if i == len(self.output_layer) - 2:  # Check if this is the layer before the last layer
-                        break
+                if len(self.output_layer) > 1:
+                    for i, layer in enumerate(self.output_layer):
+                        output_layer_embeddings = layer(output_layer_embeddings)
+                        if i == len(self.output_layer) - 2:
+                            break
                 logits = self.output_layer[-1](output_layer_embeddings)
 
         else:

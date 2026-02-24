@@ -204,7 +204,7 @@ def _get_residue_mapping(atom_array: bs.AtomArray) -> tuple[np.ndarray, list[str
 
     residue_index = np.zeros(n_atoms, dtype=np.int64)
     residue_names = []
-    residue_res_ids = np.zeros(n_atoms, dtype=np.int64)
+    residue_res_ids = np.zeros(n_residues, dtype=np.int64)
 
     for i in range(n_residues):
         start = token_starts[i]
@@ -337,7 +337,8 @@ def build_protein_atom_graph(atom_array: bs.AtomArray, chains: npt.ArrayLike | N
 
         if edge_set:
             dedup_edges = np.array(list(edge_set.keys()), dtype=np.int64).T
-            dedup_types = np.array(list(edge_set.values()), dtype=np.int64)
+            dedup_indices = np.array(list(edge_set.values()), dtype=np.int64)
+            dedup_types = edge_types[dedup_indices]
         else:
             dedup_edges = np.zeros((2, 0), dtype=np.int64)
             dedup_types = np.zeros(0, dtype=np.int64)
@@ -503,20 +504,27 @@ def _apply_residue_trim(
     if n_trim_n == 0 and n_trim_c == 0:
         return atom_array, 0, 0
 
-    # Collect res_ids to remove
-    remove_res_ids = set()
+    # Collect residue ordinals to remove (position-based, avoids res_id collisions from insertion codes)
+    remove_ordinals = set()
+    n_total = len(residues)
     if n_trim_n > 0:
-        for rid, _ in residues[:n_trim_n]:
-            remove_res_ids.add(rid)
+        remove_ordinals.update(range(n_trim_n))
     if n_trim_c > 0:
-        for rid, _ in residues[len(residues) - n_trim_c :]:
-            remove_res_ids.add(rid)
+        remove_ordinals.update(range(n_total - n_trim_c, n_total))
 
-    # Build atom-level mask: keep atoms NOT in the removed residues of this chain
+    # Build atom-level mask using ordinals: scan chain atoms in order, increment ordinal on res_id change
     keep_mask = np.ones(atom_array.array_length(), dtype=bool)
+    current_ordinal = 0
+    prev_res_id = None
     for i in range(atom_array.array_length()):
-        if atom_array.chain_id[i] == chain_id and int(atom_array.res_id[i]) in remove_res_ids:
+        if atom_array.chain_id[i] != chain_id:
+            continue
+        rid = int(atom_array.res_id[i])
+        if prev_res_id is not None and rid != prev_res_id:
+            current_ordinal += 1
+        if current_ordinal in remove_ordinals:
             keep_mask[i] = False
+        prev_res_id = rid
 
     trimmed_names = []
     if n_trim_n > 0:

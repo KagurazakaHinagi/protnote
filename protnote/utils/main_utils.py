@@ -35,8 +35,8 @@ def validate_arguments(cfg: DictConfig):
 
     if (
         (run.test_paths_names is None)
-        & (run.train_path_name is None)
-        & (run.validation_path_name is None)
+        and (run.train_path_name is None)
+        and (run.validation_path_name is None)
     ):
         raise ValueError(
             "You must provide one of the following options:\n"
@@ -47,8 +47,8 @@ def validate_arguments(cfg: DictConfig):
             "All cases with including run.full_path_name. Please provide the required option(s) and try again."
         )
 
-    if (run.save_prediction_results) & (
-        (run.test_paths_names is None) & (run.validation_path_name is None)
+    if (run.save_prediction_results) and (
+        (run.test_paths_names is None) and (run.validation_path_name is None)
     ):
         raise ValueError(
             "You must provide test_paths_names and/or validation_path_name to save the results of the validation and/or test sets."

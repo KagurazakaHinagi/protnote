@@ -8,7 +8,6 @@ import math
 import torch
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
-import math
 from torch.utils.data import Dataset
 
 
@@ -36,12 +35,14 @@ class GeneralDistributedSampler(DistributedSampler):
             drop_last=drop_last,
         )
 
-        assert len(sampler) > num_replicas, "Total samples must be > num replicas"
+        assert len(sampler) > self.num_replicas, "Total samples must be > num replicas"
 
     def __iter__(self):
-        # deterministically shuffle based on epoch
+        # deterministically shuffle based on epoch without corrupting global RNG
+        rng_state = torch.random.get_rng_state()
         torch.manual_seed(self.epoch + self.seed)
         indices = list(self.dataset)
+        torch.random.set_rng_state(rng_state)
 
         if not self.drop_last:
             # add extra samples to make it evenly divisible
@@ -138,26 +139,34 @@ class DynamicBatchSampler(BatchSampler):
         self.atom_counts = atom_counts  # array indexed by dataset position
         self.max_atoms_per_batch = max_atoms_per_batch
         self.drop_last = drop_last
+        self._cached_len = None
 
     def __iter__(self):
         batch, batch_atoms = [], 0
+        count = 0
         for idx in self.element_sampler:
             n = self.atom_counts[idx]
             if batch and batch_atoms + n > self.max_atoms_per_batch:
                 yield batch
+                count += 1
                 batch, batch_atoms = [], 0
             batch.append(idx)
             batch_atoms += n
         if batch and not self.drop_last:
             yield batch
+            count += 1
+        self._cached_len = count
 
     def __len__(self):
-        # Approximate: total atoms seen by this sampler / budget
+        if self._cached_len is not None:
+            return self._cached_len
+        # Approximate before first iteration: total atoms seen by this sampler / budget
         total = sum(self.atom_counts[i] for i in range(len(self.atom_counts)))
         ratio = len(self.element_sampler) / max(len(self.atom_counts), 1)
         return max(1, int(total * ratio / self.max_atoms_per_batch))
 
     def set_epoch(self, epoch):
+        self._cached_len = None
         if hasattr(self.element_sampler, "set_epoch"):
             self.element_sampler.set_epoch(epoch)
 
@@ -182,13 +191,17 @@ class GridBatchSampler(BatchSampler):
         self.labels_idxs = list(range(num_labels))
         self.calculate_num_batches()
 
+    def set_epoch(self, epoch):
+        if hasattr(self.observation_sampler, "set_epoch"):
+            self.observation_sampler.set_epoch(epoch)
+
     def __iter__(self):
         random.shuffle(self.labels_idxs)
-        print("Getting label batches...")
+        print("Getting observation batches...")
         observation_batches = self.get_observation_batches()
         print("Done...")
 
-        print("Getting observation batches...")
+        print("Getting label batches...")
         label_batches = self.get_label_batches()
         print("Done...")
 
@@ -271,9 +284,8 @@ def observation_sampler_factory(
     rank: int = 0,
     sequence_weights: torch.Tensor = None,
 ):
-    if distribute_labels and not weighted_sampling:
-        print("WARNING: No Sampler used for distribute labels")
-        sampler = None
+    if distribute_labels:
+        raise NotImplementedError("distribute_labels=True is not yet supported")
     elif not distribute_labels and world_size == 1 and weighted_sampling:
         # If NOT distributing labels, and not training on multiple GPU's, create a non-distributed weighted sampler with replacement
         assert sequence_weights is not None, "Weighted RandomSampler requires weights"

@@ -69,21 +69,27 @@ def download_pdb_structure(seq_id: str, pdb_id: str, output_dir: Path, override:
         output_dir (Path): The directory to save the structure file.
         override (bool): Whether to override the existing file.
     """
-    filename = f"{seq_id.lower()}.cif"
-    output_path = output_dir / filename
+    cif_path = output_dir / f"{seq_id.lower()}.cif"
+    pdb_path = output_dir / f"{seq_id.lower()}.pdb"
 
-    if output_path.exists() and not override:
-        return output_path
+    # Return existing file if present (check both extensions)
+    if not override:
+        if cif_path.exists():
+            return cif_path
+        if pdb_path.exists():
+            return pdb_path
 
     url = f"{cfg.remote.RCSB_PDB_URL}/{pdb_id.upper()}.cif"
     fallback_url = f"{cfg.remote.RCSB_PDB_URL}/{pdb_id.upper()}.pdb"
 
     try:
         response = fetch_with_retries(url)
+        output_path = cif_path
     except requests.exceptions.RequestException as e:
         logger.warning(f"HTTP error fetching RCSB PDB data for {seq_id} with {pdb_id}: {e}")
         try:
             response = fetch_with_retries(fallback_url)
+            output_path = pdb_path
         except requests.exceptions.RequestException as e:
             logger.error(f"HTTP error fetching RCSB PDB data for {seq_id} with {pdb_id} (fallback): {e}")
             return None

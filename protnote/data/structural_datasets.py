@@ -157,10 +157,10 @@ class ProteinStructureDataset(Dataset):
         )
 
         # Label embeddings (same as ProteinDataset)
-        INDEX_OUTPUT_PATH = config["LABEL_EMBEDDING_PATH"].split(".")
+        INDEX_OUTPUT_PATH = config["LABEL_EMBEDDING_PATH"].rsplit(".", 1)
         INDEX_OUTPUT_PATH = "_".join([INDEX_OUTPUT_PATH[0], "index"]) + "." + INDEX_OUTPUT_PATH[1]
-        index_mapping = torch.load(INDEX_OUTPUT_PATH)
-        emb_tensor = torch.load(config["LABEL_EMBEDDING_PATH"])
+        index_mapping = torch.load(INDEX_OUTPUT_PATH, weights_only=False)
+        emb_tensor = torch.load(config["LABEL_EMBEDDING_PATH"], weights_only=False)
         (
             self.label_embeddings_index,
             self.label_embeddings,
@@ -188,16 +188,16 @@ class ProteinStructureDataset(Dataset):
         if reader is not None and sequence_id in reader:
             try:
                 return reader[sequence_id]
-            except Exception as e:
+            except (KeyError, EOFError, OSError, RuntimeError) as e:
                 self.logger.warning(f"Failed to load graph for {sequence_id} from archive: {e}. Trying individual file.")
 
         # Then try individual file
-        if sequence_id in self.graph_index:
+        if sequence_id in self.graph_index and self.graph_dir is not None:
             graph_path = os.path.join(self.graph_dir, self.graph_index[sequence_id]["filename"])
             try:
                 graph_data = torch.load(graph_path, weights_only=False)
                 return graph_data
-            except Exception as e:
+            except (FileNotFoundError, EOFError, OSError, RuntimeError) as e:
                 self.logger.warning(f"Failed to load graph for {sequence_id}: {e}. Using fallback.")
 
         # Fallback: one virtual atom per residue, no edges
@@ -230,7 +230,10 @@ class ProteinStructureDataset(Dataset):
                 label_freq[lab] += 1
         self.label_frequency = label_freq
 
-        vocabularies = generate_vocabularies(data=self.data)
+        if vocabulary_path != self.data_path:
+            vocabularies = generate_vocabularies(file_path=vocabulary_path)
+        else:
+            vocabularies = generate_vocabularies(data=self.data)
         self.amino_acid_vocabulary = vocabularies["amino_acid_vocab"]
         self.label_vocabulary = vocabularies["label_vocab"]
         self.sequence_id_vocabulary = vocabularies["sequence_id_vocab"]
@@ -250,6 +253,10 @@ class ProteinStructureDataset(Dataset):
 
     def _process_label_embedding_mapping(self, mapping, embeddings):
         import pandas as pd
+
+        assert set(self.inference_go_descriptions).issubset(
+            set(["name", "label"])
+        ), "only supporting name, label or name+label"
 
         if not isinstance(mapping, pd.DataFrame):
             mapping = pd.DataFrame(mapping)
@@ -312,7 +319,8 @@ class ProteinStructureDataset(Dataset):
         else:
             weights = counts
         if normalize:
-            weights = weights / weights.sum()
+            num_labels = len(self.label_vocabulary)
+            weights = weights * num_labels / weights.sum()
         if return_list:
             return torch.tensor(weights, dtype=torch.float32)
         # Return dict mapping label names to weights (same as ProteinDataset)
@@ -336,9 +344,11 @@ class ProteinStructureDataset(Dataset):
         # During training with multiple augmentation descriptions, sample one embedding per label
         if self.dataset_type == "train" and len(self.label_augmentation_descriptions) > 1:
             label_embeddings, label_token_counts = self._sample_label_embeddings()
+            if not isinstance(label_token_counts, torch.Tensor):
+                label_token_counts = torch.tensor(label_token_counts)
         else:
             label_embeddings = self.sorted_label_embeddings
-            label_token_counts = self.sorted_label_token_counts
+            label_token_counts = torch.tensor(self.sorted_label_token_counts) if not isinstance(self.sorted_label_token_counts, torch.Tensor) else self.sorted_label_token_counts
 
         if self.use_atom_level:
             return self._getitem_atom_level(sequence, sequence_id, label_multihots, label_embeddings, label_token_counts)

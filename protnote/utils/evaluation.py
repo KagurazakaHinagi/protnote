@@ -88,9 +88,7 @@ class SamplewiseF1Score(Metric):
         super().__init__()
         self.threshold = threshold
         self.precision_samplewise = SamplewisePrecision(threshold)
-        self.recall_samplewise = BinaryRecall(
-            threshold=threshold, multidim_average="samplewise"
-        )
+        self.recall_samplewise = SamplewiseRecall(threshold)
 
     def update(self, probas: torch.Tensor, labels: torch.Tensor):
         self.precision_samplewise.update(probas, labels)
@@ -98,7 +96,7 @@ class SamplewiseF1Score(Metric):
 
     def compute(self) -> torch.Tensor:
         precision = self.precision_samplewise.compute()
-        recall = self.recall_samplewise.compute().mean()
+        recall = self.recall_samplewise.compute()
         f1 = 2 * (precision * recall) / (precision + recall + 1e-6)
 
         return f1
@@ -108,7 +106,7 @@ def metric_collection_to_dict_float(metric_collection: MetricCollection, prefix=
     metric_collection = metric_collection.copy()
 
     for k, v in metric_collection.items():
-        if (not isinstance(v, float)) & (not isinstance(v, int)):
+        if (not isinstance(v, float)) and (not isinstance(v, int)):
             if isinstance(v, torch.Tensor):
                 metric_collection[k] = v.item()
 
@@ -323,7 +321,7 @@ def save_evaluation_results(
 
 
 def metrics_per_label_df(
-    logits_df: pd.DataFrame, labels_df: pd.DataFrame, device: str, threshold: None
+    logits_df: pd.DataFrame, labels_df: pd.DataFrame, device: str, threshold: float
 ) -> pd.DataFrame:
     """Calculate the following per label metrics: Average Precision,F1,Precision,Recall,label frequency
 
@@ -364,7 +362,7 @@ def metrics_per_label_df(
                 .item()
             )
             row["Recall"] = (
-                Precision(task="binary", threshold=threshold)
+                Recall(task="binary", threshold=threshold)
                 .to(device)(preds, ground_truth)
                 .item()
             )

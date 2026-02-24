@@ -172,7 +172,7 @@ def pool_embeddings(last_hidden_states, attention_mask, method, account_for_sos)
             .expand(-1, -1, last_hidden_states.size(-1))
         )
 
-        sequence_embedding = last_hidden_states.gather(1, last_token_indices).squeeze()
+        sequence_embedding = last_hidden_states.gather(1, last_token_indices).squeeze(1)
     elif method == "all":
         sequence_embedding = last_hidden_states
 
@@ -186,17 +186,23 @@ def get_label_embeddings(
     batch_size_limit=1000,
     append_in_cpu=False,
     account_for_sos=True,
+    requires_grad=False,
 ):
     """
     Get embeddings for a list of tokenized labels.
     Assumes that tokenized_labels and model are on the same device, ideally GPU.
+    When requires_grad=True, gradients flow through the label encoder (for fine-tuning).
     """
 
     total_labels = tokenized_labels["input_ids"].shape[0]
-    model.eval()
+    was_training = model.training
+    if not requires_grad:
+        model.eval()
+
+    grad_ctx = torch.no_grad() if not requires_grad else torch.enable_grad()
 
     if total_labels <= batch_size_limit:
-        with autocast(), torch.no_grad():
+        with autocast(), grad_ctx:
             sequence_embeddings = model(
                 input_ids=tokenized_labels["input_ids"],
                 attention_mask=tokenized_labels["attention_mask"],
@@ -208,6 +214,8 @@ def get_label_embeddings(
             account_for_sos=account_for_sos,
         )
 
+        if was_training:
+            model.train()
         return sequence_embeddings
 
     else:
@@ -226,7 +234,7 @@ def get_label_embeddings(
         all_label_embeddings = []
         for idx, batch in enumerate(dataloader):
             input_ids, attention_mask = batch
-            with autocast(), torch.no_grad():
+            with autocast(), grad_ctx:
                 sequence_embeddings = model(
                     input_ids=input_ids, attention_mask=attention_mask
                 ).last_hidden_state
@@ -249,7 +257,8 @@ def get_label_embeddings(
                     )
 
         # Concatenate all the label embeddings
-        model.train()
+        if was_training:
+            model.train()
         return torch.cat(all_label_embeddings, dim=0)
 
 
@@ -301,7 +310,7 @@ def print_checkpoint(checkpoint):
     print("optimizer max step", checkpoint["optimizer_state_dict"]["state"][max_step])
 
 
-def save_checkpoint(model, optimizer, epoch, best_val_metric, model_path):
+def save_checkpoint(model, optimizer, epoch, best_val_metric, model_path, best_val_loss=None):
     """
     Save model and optimizer states as a checkpoint.
 
@@ -310,12 +319,14 @@ def save_checkpoint(model, optimizer, epoch, best_val_metric, model_path):
     - optimizer (torch.optim.Optimizer): The optimizer whose state we want to save.
     - epoch (int): The current training epoch.
     - model_path (str): The path where the checkpoint will be saved.
+    - best_val_loss (float, optional): The best validation loss so far.
     """
     checkpoint = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "best_val_metric": best_val_metric,
+        "best_val_loss": best_val_loss,
     }
 
     torch.save(checkpoint, model_path)
@@ -342,7 +353,7 @@ def load_model(trainer, checkpoint_path: str, rank: int, from_checkpoint=False):
 
     # Load the entire checkpoint
     map_location = {"cuda:%d" % 0: "cuda:%d" % rank}
-    checkpoint = torch.load(checkpoint_path, map_location=map_location)
+    checkpoint = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
 
     print_checkpoint(checkpoint)
 
@@ -369,6 +380,8 @@ def load_model(trainer, checkpoint_path: str, rank: int, from_checkpoint=False):
         trainer.epoch = trainer.starting_epoch
     if "best_val_metric" in checkpoint and from_checkpoint:
         trainer.best_val_metric = checkpoint["best_val_metric"]
+    if "best_val_loss" in checkpoint and from_checkpoint and checkpoint["best_val_loss"] is not None:
+        trainer.best_val_loss = checkpoint["best_val_loss"]
 
     # Delete the checkpoint to save memoryload_checkpoint[]
     del checkpoint

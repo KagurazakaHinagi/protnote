@@ -166,6 +166,8 @@ def _setup_logging(paths: dict, run_name: str, is_master: bool):
     full_log_path = os.path.join(log_dir, f"{timestamp}_{run_name}.log")
 
     logger = logging.getLogger()
+    # Clear existing handlers to avoid duplicates on repeated calls (e.g. DDP)
+    logger.handlers.clear()
 
     if is_master:
         logger.setLevel(logging.INFO)

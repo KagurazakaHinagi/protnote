@@ -264,7 +264,7 @@ class StructuralProteinEncoder(nn.Module):
             h, x, _ = gcl(h, edge_index, x, edge_attr=None)
 
         # Global max pooling per protein
-        out = torch_scatter.scatter_max(h, atom_to_protein, dim=0)[0].float()
+        out = torch_scatter.scatter_max(h, atom_to_protein, dim=0, dim_size=num_proteins)[0].float()
 
         return self.projection(out)
 

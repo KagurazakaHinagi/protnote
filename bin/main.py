@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import socket
 
 import hydra
 import torch
@@ -52,7 +53,12 @@ def main(cfg: DictConfig):
         run.nr = int(os.environ["NODE_RANK"])
     else:
         os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "8889"
+        if run.master_port is not None:
+            os.environ["MASTER_PORT"] = str(run.master_port)
+        else:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("", 0))
+                os.environ["MASTER_PORT"] = str(s.getsockname()[1])
 
     mp.spawn(train_validate_test, nprocs=run.gpus, args=(cfg, world_size))
 
@@ -111,7 +117,7 @@ def train_validate_test(gpu, cfg, world_size):
             entity=run.wandb_entity,
         )
 
-        if run.amlt & run.mlflow:
+        if run.amlt and run.mlflow:
             import mlflow
 
             # MLFlow logging for Hyperdrive
@@ -223,7 +229,7 @@ def train_validate_test(gpu, cfg, world_size):
 
     # Calculate the weighting for the train dataset
     sequence_weights = None
-    if params["WEIGHTED_SAMPLING"] & (run.train_path_name is not None):
+    if params["WEIGHTED_SAMPLING"] and (run.train_path_name is not None):
         # Calculate label weights (need dict format for calculate_sequence_weights)
         logger.info("Calculating label weights for weighted sampling...")
         label_weights = datasets["train"][0].calculate_label_weights(
@@ -289,7 +295,7 @@ def train_validate_test(gpu, cfg, world_size):
         logger.info(f"Using structural encoder: ESM-C + EGNN (output_dim={params['PROTEIN_EMBEDDING_DIM']})")
     else:
         # Legacy ProteInfer sequence encoder
-        if params["PRETRAINED_SEQUENCE_ENCODER"] & (run.model_file is None):
+        if params["PRETRAINED_SEQUENCE_ENCODER"] and (run.model_file is None):
             sequence_encoder = ProteInfer.from_pretrained(
                 weights_path=paths[f"PROTEINFER_{task}_WEIGHTS_PATH"],
                 num_labels=config["embed_sequences_params"]["PROTEINFER_NUM_GO_LABELS"],
@@ -340,7 +346,7 @@ def train_validate_test(gpu, cfg, world_size):
         projection_head_hidden_dim_scale_factor=params["PROJECTION_HEAD_HIDDEN_DIM_SCALE_FACTOR"],
         # Training options
         label_encoder_num_trainable_layers=params["LABEL_ENCODER_NUM_TRAINABLE_LAYERS"],
-        train_sequence_encoder=params["TRAIN_SEQUENCE_ENCODER"],
+        train_sequence_encoder=params["TRAIN_PROTEIN_ENCODER"] if use_hybrid else params["TRAIN_SEQUENCE_ENCODER"],
         # Batch size limits
         label_batch_size_limit=params["LABEL_BATCH_SIZE_LIMIT_NO_GRAD"],
         sequence_batch_size_limit=params["SEQUENCE_BATCH_SIZE_LIMIT_NO_GRAD"],
@@ -356,12 +362,14 @@ def train_validate_test(gpu, cfg, world_size):
     model = DDP(model.to(rank), device_ids=[rank], find_unused_parameters=True)
 
     # Calculate bce_pos_weight based on the training set
-    if (params["BCE_POS_WEIGHT"] is None) & (run.train_path_name is not None):
+    if (params["BCE_POS_WEIGHT"] is None) and (run.train_path_name is not None):
         bce_pos_weight = datasets["train"][0].calculate_pos_weight().to(device)
     elif params["BCE_POS_WEIGHT"] is not None:
         bce_pos_weight = torch.tensor(params["BCE_POS_WEIGHT"]).to(device)
-    else:
+    elif params["LOSS_FN"] in ("BCE", "WeightedBCE"):
         raise ValueError("BCE_POS_WEIGHT is not provided and no training set is provided to calculate it.")
+    else:
+        bce_pos_weight = None
 
     if params["LOSS_FN"] == "WeightedBCE":
         if run.train_path_name is not None:
@@ -421,12 +429,12 @@ def train_validate_test(gpu, cfg, world_size):
     if run.model_file:
         load_model(
             trainer=Trainer,
-            checkpoint_path=os.path.join(config["DATA_PATH"], run.model_file),
+            checkpoint_path=run.model_file,
             rank=rank,
             from_checkpoint=run.from_checkpoint,
         )
         logger.info(
-            f"Loading model checkpoing from {os.path.join(config['DATA_PATH'], run.model_file)}. If training, will continue from epoch {Trainer.epoch + 1}.\n"
+            f"Loading model checkpoint from {run.model_file}. If training, will continue from epoch {Trainer.epoch + 1}.\n"
         )
 
     # Initialize EvalMetrics
@@ -448,7 +456,7 @@ def train_validate_test(gpu, cfg, world_size):
             train_eval_metrics=eval_metrics.get_metric_collection_with_regex(
                 pattern="f1_m.*",
                 threshold=0.5,
-                num_labels=label_sample_sizes["train"] if (params["IN_BATCH_SAMPLING"] or params["GRID_SAMPLER"]) is False else None,
+                num_labels=label_sample_sizes["train"] if not (params["IN_BATCH_SAMPLING"] or params["GRID_SAMPLER"]) else None,
             ),
             val_eval_metrics=eval_metrics.get_metric_collection_with_regex(
                 pattern="f1_m.*",
@@ -467,7 +475,8 @@ def train_validate_test(gpu, cfg, world_size):
 
     # Setup for validation
     run_metrics = {"name": run.name}
-    if run.save_val_test_metrics & is_master:
+    if run.save_val_test_metrics and is_master:
+        os.makedirs(os.path.dirname(run.save_val_test_metrics_file), exist_ok=True)
         if not os.path.exists(run.save_val_test_metrics_file):
             write_json([], run.save_val_test_metrics_file)
         metrics_results = read_json(run.save_val_test_metrics_file)
@@ -532,7 +541,7 @@ def train_validate_test(gpu, cfg, world_size):
                 run_metrics.update(test_metrics)
             logger.info("Testing complete.")
 
-        all_metrics.update(test_metrics)
+        all_metrics.update(all_test_metrics)
 
     ####### CLEANUP #######
 
@@ -547,20 +556,20 @@ def train_validate_test(gpu, cfg, world_size):
         if run.test_paths_names:
             if run.wandb_project is not None:
                 wandb.log(all_test_metrics)
-            if run.amlt & run.mlflow:
+            if run.amlt and run.mlflow:
                 mlflow.log_metrics(all_test_metrics)
 
         # Log val metrics
         if run.validation_path_name:
             if run.wandb_project is not None:
                 wandb.log(validation_metrics)
-            if run.amlt & run.mlflow:
+            if run.amlt and run.mlflow:
                 mlflow.log_metrics(validation_metrics)
 
         # Close metric loggers
         if run.wandb_project is not None:
             wandb.finish()
-        if run.amlt & run.mlflow:
+        if run.amlt and run.mlflow:
             mlflow.end_run()
 
     # Loggers

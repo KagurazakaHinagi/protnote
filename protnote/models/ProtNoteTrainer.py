@@ -237,7 +237,7 @@ class ProtNoteTrainer:
             ):
                 param.requires_grad = False
 
-            if (name.startswith("W_p.weight") or name.startswith("W_l.weight")) and (
+            if (name.startswith("W_p.") or name.startswith("W_l.")) and (
                 not self.train_projection_head
             ):
                 param.requires_grad = False
@@ -382,10 +382,11 @@ class ProtNoteTrainer:
             self.best_val_metric = val_metrics[val_optimization_metric_name]
 
             save_checkpoint(
-                model=self.model.module,
+                model=self._get_model(),
                 optimizer=self.optimizer,
                 epoch=self.epoch,
                 best_val_metric=self.best_val_metric,
+                best_val_loss=self.best_val_loss,
                 model_path=self.model_path_best_metric,
             )
             self.logger.info(f"Saved model to {self.model_path_best_metric}")
@@ -403,10 +404,11 @@ class ProtNoteTrainer:
             self.best_val_loss = val_metrics[f"{prefix}_loss"]
 
             save_checkpoint(
-                model=self.model.module,
+                model=self._get_model(),
                 optimizer=self.optimizer,
                 epoch=self.epoch,
                 best_val_metric=self.best_val_loss,
+                best_val_loss=self.best_val_loss,
                 model_path=self.model_path_best_loss,
             )
             self.logger.info(f"Saved model to {self.model_path_best_loss}")
@@ -443,6 +445,9 @@ class ProtNoteTrainer:
         all_probabilities = []
         all_label_multihots = []
 
+        all_probabilities = []
+        all_label_multihots = []
+
         with torch.no_grad():
             for batch in data_loader:
                 _, logits, label_multihots, _, embeddings = self.evaluation_step(
@@ -454,25 +459,24 @@ class ProtNoteTrainer:
 
                 if self.normalize_probabilities:
                     probabilities = self._normalize_probabilities(probabilities)
-
-                all_probabilities.append(probabilities)
-                all_label_multihots.append(label_multihots)
+                all_probabilities.append(probabilities.cpu())
+                all_label_multihots.append(label_multihots.cpu())
 
             all_probabilities = torch.cat(all_probabilities)
             all_label_multihots = torch.cat(all_label_multihots)
 
         for th in np.arange(0.1, 1, 0.01):
-            optimization_metric = EvalMetrics(device=self.device).get_metric_by_name(
+            optimization_metric = EvalMetrics(device="cpu").get_metric_by_name(
                 name=optimization_metric_name,
                 threshold=th,
-                num_labels=label_multihots.shape[-1],
+                num_labels=all_label_multihots.shape[-1],
             )
 
             optimization_metric(all_probabilities, all_label_multihots)
             score = optimization_metric.compute().item()
             if score > best_score:
                 best_score = score
-                best_th = th
+                best_th = float(th)
             self.logger.info("TH: {:.3f}, F1: {:.3f}".format(th, score))
 
         best_score = best_score
@@ -529,9 +533,9 @@ class ProtNoteTrainer:
             mAP_macro = MultilabelAUPRC(device="cpu", num_labels=num_labels)
 
         elif self.config["params"]["ESTIMATE_MAP"] == True:
-            mAP_micro = BinaryBinnedAUPRC(device=self.device, threshold=50)
+            mAP_micro = BinaryBinnedAUPRC(device="cpu", threshold=50)
             mAP_macro = MultilabelBinnedAUPRC(
-                device=self.device, num_labels=num_labels, threshold=50
+                device="cpu", num_labels=num_labels, threshold=50
             )
 
         elif self.config["params"]["ESTIMATE_MAP"] is None:
@@ -558,6 +562,7 @@ class ProtNoteTrainer:
                 shutil.rmtree(embeddings_export_dir)
             os.mkdir(embeddings_export_dir)
 
+        batch_idx = -1
         with torch.no_grad():
             for batch_idx, batch in enumerate(data_loader):
                 loss, logits, labels, sequence_ids, embeddings = self.evaluation_step(
@@ -572,68 +577,69 @@ class ProtNoteTrainer:
                     probabilities = torch.sigmoid(logits)
 
                     if self.normalize_probabilities:
-                        probabilities = self._normalize_probabilities()
+                        probabilities = self._normalize_probabilities(probabilities)
 
                     # Update eval metrics
                     eval_metrics(probabilities, labels)
-                    tp, fn, fp = calculate_tp_fn_fp(
-                        probs=probabilities,
-                        labels=labels,
-                        threshold=self.config["params"]["DECISION_TH"],
-                    )
+                    if self.config["params"]["DECISION_TH"] is not None:
+                        tp, fn, fp = calculate_tp_fn_fp(
+                            probs=probabilities,
+                            labels=labels,
+                            threshold=self.config["params"]["DECISION_TH"],
+                        )
 
-                    total_tp_per_label += tp
-                    total_fn_per_label += fn
-                    total_fp_per_label += fp
+                        total_tp_per_label += tp
+                        total_fn_per_label += fn
+                        total_fp_per_label += fp
 
-                    if (mAP_macro is not None) & (mAP_micro is not None):
+                    if (mAP_macro is not None) and (mAP_micro is not None):
                         mAP_micro.update(
                             probabilities.cpu().flatten(), labels.cpu().flatten()
                         )
                         mAP_macro.update(probabilities.cpu(), labels.cpu())
 
-                    # No need to save results everytime. Only need it for final evaluation.
-                    if save_results:
-                        test_results["sequence_ids"].append(sequence_ids)
-                        test_results["logits"].append(logits.cpu())
-                        test_results["labels"].append(labels.cpu())
+                # No need to save results everytime. Only need it for final evaluation.
+                if save_results:
+                    test_results["sequence_ids"].append(sequence_ids)
+                    test_results["logits"].append(logits.cpu())
+                    test_results["labels"].append(labels.cpu())
 
-                    if return_embeddings:
-                        all_embeddings["joint_embeddings"].append(
-                            embeddings["joint_embeddings"]
+                if return_embeddings:
+                    all_embeddings["joint_embeddings"].append(
+                        embeddings["joint_embeddings"]
+                    )
+                    all_embeddings["output_layer_embeddings"].append(
+                        embeddings["output_layer_embeddings"]
+                    )
+                    all_embeddings["labels"].append(labels.cpu())
+                    all_embeddings["sequence_ids"].append(sequence_ids)
+
+                    # Export every 100 batches
+
+                    if (batch_idx + 1) % embeddings_num_batches == 0:
+                        for key, embedding_list in all_embeddings.items():
+                            if key == "sequence_ids":
+                                all_embeddings[key] = [
+                                    j
+                                    for i in all_embeddings["sequence_ids"]
+                                    for j in i
+                                ]
+                            else:
+                                all_embeddings[key] = torch.cat(
+                                    embedding_list
+                                ).numpy()
+
+                        torch.save(
+                            all_embeddings,
+                            os.path.join(
+                                embeddings_export_dir,
+                                f"batches_{batch_idx-embeddings_num_batches+1}_{batch_idx}.pt",
+                            ),
+                            pickle_protocol=pickle.HIGHEST_PROTOCOL,
                         )
-                        all_embeddings["output_layer_embeddings"].append(
-                            embeddings["output_layer_embeddings"]
-                        )
-                        all_embeddings["labels"].append(labels.cpu())
-                        all_embeddings["sequence_ids"].append(sequence_ids)
 
-                        # Export every 100 batches
-
-                        if (batch_idx + 1) % embeddings_num_batches == 0:
-                            for key, embedding_list in all_embeddings.items():
-                                if key == "sequence_ids":
-                                    all_embeddings[key] = [
-                                        j
-                                        for i in all_embeddings["sequence_ids"]
-                                        for j in i
-                                    ]
-                                else:
-                                    all_embeddings[key] = torch.cat(
-                                        embedding_list
-                                    ).numpy()
-
-                            torch.save(
-                                all_embeddings,
-                                os.path.join(
-                                    embeddings_export_dir,
-                                    f"batches_{batch_idx-embeddings_num_batches+1}_{batch_idx}.pt",
-                                ),
-                                pickle_protocol=pickle.HIGHEST_PROTOCOL,
-                            )
-
-                            # Clean buffer
-                            all_embeddings = {k: [] for k in all_embeddings.keys()}
+                        # Clean buffer
+                        all_embeddings = {k: [] for k in all_embeddings.keys()}
 
                 # Print progress every 25%
                 progress_chunk = 20
@@ -649,12 +655,20 @@ class ProtNoteTrainer:
                 # Update loss
                 avg_loss.update(loss)
 
-            # if return_embeddings:
-            #     for embedding_type, embedding_list in all_embeddings.items():
-            #         all_embeddings[embedding_type] = torch.cat(embedding_list).numpy()
-            #     torch.save(all_embeddings,
-            #                os.path.join(self.config["paths"]["RESULTS_DIR"],f'{data_loader_name}_embeddings_{self.run_name}.pt')
-            #                )
+            if return_embeddings and any(len(v) > 0 for v in all_embeddings.values()):
+                for key, embedding_list in all_embeddings.items():
+                    if key == "sequence_ids":
+                        all_embeddings[key] = [j for i in embedding_list for j in i]
+                    else:
+                        all_embeddings[key] = torch.cat(embedding_list).numpy()
+                torch.save(
+                    all_embeddings,
+                    os.path.join(
+                        embeddings_export_dir,
+                        f"batches_{batch_idx - (batch_idx % embeddings_num_batches)}_{batch_idx}.pt",
+                    ),
+                    pickle_protocol=pickle.HIGHEST_PROTOCOL,
+                )
 
             if save_results:
                 for key in test_results.keys():
@@ -676,7 +690,7 @@ class ProtNoteTrainer:
                                 data_loader.dataset.represented_vocabulary_mask,
                             )
                             if mask == True
-                        ],
+                        ] if only_represented_labels else data_loader.dataset.label_vocabulary,
                         run_name=self.run_name,
                         output_dir=self.config["paths"]["RESULTS_DIR"],
                         data_split_name=data_loader_name,
@@ -684,9 +698,10 @@ class ProtNoteTrainer:
                     )
 
             # Aggregate the TP, FN, FP across all GPUs
-            dist.reduce(total_tp_per_label, dst=0, op=dist.ReduceOp.SUM)
-            dist.reduce(total_fn_per_label, dst=0, op=dist.ReduceOp.SUM)
-            dist.reduce(total_fp_per_label, dst=0, op=dist.ReduceOp.SUM)
+            if dist.is_initialized():
+                dist.reduce(total_tp_per_label, dst=0, op=dist.ReduceOp.SUM)
+                dist.reduce(total_fn_per_label, dst=0, op=dist.ReduceOp.SUM)
+                dist.reduce(total_fp_per_label, dst=0, op=dist.ReduceOp.SUM)
 
             global_f1_scores_per_label = calculate_f1(
                 tp=total_tp_per_label, fn=total_fn_per_label, fp=total_fp_per_label
@@ -700,9 +715,9 @@ class ProtNoteTrainer:
 
             final_metrics = eval_metrics.compute() if eval_metrics is not None else {}
 
-            global_mAP_micro = sync_and_compute(mAP_micro)
+            global_mAP_micro = sync_and_compute(mAP_micro) if mAP_micro is not None else None
             global_avg_loss = sync_and_compute(avg_loss)
-            global_mAP_macro = sync_and_compute(mAP_macro)
+            global_mAP_macro = sync_and_compute(mAP_macro) if mAP_macro is not None else None
 
             final_metrics.update(
                 {
@@ -855,24 +870,25 @@ class ProtNoteTrainer:
                 self.scaler.update()
                 self.optimizer.zero_grad()
 
-            avg_loss.update(loss.detach())
+            avg_loss.update(loss.detach() * self.gradient_accumulation_steps)
 
             eval_metrics(
-                logits.detach(), label_multihots.detach()
+                torch.sigmoid(logits.detach()), label_multihots.detach()
             )  # detaching labels is not "necessary" because they don't retain the graph
-            tp, fn, fp = calculate_tp_fn_fp(
-                probs=torch.sigmoid(logits.detach()),
-                labels=label_multihots.detach(),
-                threshold=self.config["params"]["DECISION_TH"],
-            )
+            if self.config["params"]["DECISION_TH"] is not None:
+                tp, fn, fp = calculate_tp_fn_fp(
+                    probs=torch.sigmoid(logits.detach()),
+                    labels=label_multihots.detach(),
+                    threshold=self.config["params"]["DECISION_TH"],
+                )
 
-            total_tp_per_label += tp
-            total_fn_per_label += fn
-            total_fp_per_label += fp
+                total_tp_per_label += tp
+                total_fn_per_label += fn
+                total_fp_per_label += fp
 
             if self.use_wandb and self.is_master:
                 wandb.log(
-                    {"per_batch_train_loss": loss.item()},  # .item() is detached
+                    {"per_batch_train_loss": loss.item() * self.gradient_accumulation_steps},
                     step=self.training_step,
                 )
 
@@ -887,15 +903,16 @@ class ProtNoteTrainer:
                 )
 
             # Print progress every 10%
-            if batch_idx % (len(train_loader) // 10) == 0:
+            if batch_idx % max(len(train_loader) // 10, 1) == 0:
                 self.logger.info(
                     f"[Train] Epoch {self.epoch}: Processed {batch_idx} out of {len(train_loader)} batches ({batch_idx / len(train_loader) * 100:.2f}%)."
                 )
 
         # Aggregate the TP, FN, FP across all GPUs
-        dist.reduce(total_tp_per_label, dst=0, op=dist.ReduceOp.SUM)
-        dist.reduce(total_fn_per_label, dst=0, op=dist.ReduceOp.SUM)
-        dist.reduce(total_fp_per_label, dst=0, op=dist.ReduceOp.SUM)
+        if dist.is_initialized():
+            dist.reduce(total_tp_per_label, dst=0, op=dist.ReduceOp.SUM)
+            dist.reduce(total_fn_per_label, dst=0, op=dist.ReduceOp.SUM)
+            dist.reduce(total_fp_per_label, dst=0, op=dist.ReduceOp.SUM)
 
         global_f1_scores_per_label = calculate_f1(
             tp=total_tp_per_label, fn=total_fn_per_label, fp=total_fp_per_label
@@ -948,8 +965,8 @@ class ProtNoteTrainer:
         if self.use_wandb:
             wandb.watch(self.model)
 
-        # Compute total number of training steps
-        self.training_step = 0
+        # Compute total number of training steps (account for resumed training)
+        self.training_step = (self.starting_epoch - 1) * len(train_loader)
         num_training_steps = len(train_loader) * self.num_epochs
 
         self.logger.info(f"{'='*100}")
@@ -995,10 +1012,11 @@ class ProtNoteTrainer:
                 if epoch == self.starting_epoch + self.num_epochs - 1:
                     self.logger.info("Saving model from last epoch...")
                     save_checkpoint(
-                        model=self.model.module,
+                        model=self._get_model(),
                         optimizer=self.optimizer,
                         epoch=self.epoch,
                         best_val_metric=self.best_val_metric,
+                        best_val_loss=self.best_val_loss,
                         model_path=self.model_path_last_epoch,
                     )
                     self.logger.info(f"Saved model to {self.model_path_last_epoch}")
@@ -1010,16 +1028,17 @@ class ProtNoteTrainer:
                     self.logger.info(f"Saving checkpoint from epoch {epoch}...")
                     epoch_model_path = self.base_model_path + f"_epoch_{epoch}.pt"
                     save_checkpoint(
-                        model=self.model.module,
+                        model=self._get_model(),
                         optimizer=self.optimizer,
                         epoch=self.epoch,
                         best_val_metric=self.best_val_metric,
+                        best_val_loss=self.best_val_loss,
                         model_path=epoch_model_path,
                     )
                     self.logger.info(f"Saved model to {epoch_model_path}")
 
                     if self.use_wandb:
-                        wandb.save(f"{self.timestamp}_last_epoch_ProtNote.pt")
+                        wandb.save(os.path.basename(epoch_model_path))
 
         if self.is_master:
             self.logger.info(
@@ -1032,12 +1051,14 @@ class ProtNoteTrainer:
             )
 
             # Broadcast model state to other processes
-            for param in self._get_model().parameters():
-                # src=0 means source is the master process
-                torch.distributed.broadcast(param.data, src=0)
+            if dist.is_initialized():
+                for param in self._get_model().parameters():
+                    # src=0 means source is the master process
+                    torch.distributed.broadcast(param.data, src=0)
         else:
             # For non-master processes, just receive the broadcasted data
-            for param in self._get_model().parameters():
-                torch.distributed.broadcast(param.data, src=0)
+            if dist.is_initialized():
+                for param in self._get_model().parameters():
+                    torch.distributed.broadcast(param.data, src=0)
 
         # self.tb.close()

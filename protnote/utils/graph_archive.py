@@ -16,6 +16,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import struct
 from pathlib import Path
 
@@ -152,10 +153,16 @@ class GraphArchiveReader:
         self._file = None
         self._entries = None
         self._data_offset = None
+        self._pid = None
 
     def _ensure_open(self):
-        if self._file is not None:
+        # Re-open if we were forked into a new process (shared fd is not safe)
+        if self._file is not None and self._pid == os.getpid():
             return
+        if self._file is not None:
+            # Forked — close inherited fd and re-open
+            self._file.close()
+            self._file = None
         f = open(self._archive_path, "rb")
         identifier = f.read(len(IDENTIFIER))
         if identifier != IDENTIFIER:
@@ -170,6 +177,7 @@ class GraphArchiveReader:
         self._entries = header["entries"]
         self._data_offset = len(IDENTIFIER) + HEADER_LEN_SIZE + header_len
         self._file = f
+        self._pid = os.getpid()
 
     def __contains__(self, seq_id):
         self._ensure_open()

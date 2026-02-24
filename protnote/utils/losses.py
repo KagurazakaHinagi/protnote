@@ -63,7 +63,7 @@ class RGDBCE(torch.nn.Module):
 
     def forward(self, input, target):
         loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            input, target, reduce="none"
+            input, target, reduction="none"
         )
         return (
             loss
@@ -78,7 +78,7 @@ class CBLoss(torch.nn.Module):
     def __init__(self, label_weights: torch.Tensor, beta=0.9999):
         super().__init__()
 
-        self.label_weights = label_weights
+        self.register_buffer("label_weights", label_weights)
         self.beta = beta
         assert label_weights is not None, "label_weights must be provided and not None"
 
@@ -88,7 +88,7 @@ class CBLoss(torch.nn.Module):
 
         # Replace zeros in effective_num with 'inf' (infinity) to avoid division by zero
         effective_num = torch.where(
-            effective_num == 0, torch.tensor(float("inf")), effective_num
+            effective_num == 0, torch.tensor(float("inf"), device=effective_num.device), effective_num
         )
 
         weights = (1.0 - self.beta) / effective_num
@@ -106,7 +106,7 @@ class WeightedBCE(torch.nn.Module):
     def __init__(self, label_weights: torch.Tensor):
         super().__init__()
         assert label_weights is not None, "label_weights must be provided and not None"
-        self.label_weights = label_weights
+        self.register_buffer("label_weights", label_weights)
 
     def forward(self, input, target):
         batch_weights = get_batch_weights_v2(
@@ -125,8 +125,10 @@ class BatchWeightedBCE(torch.nn.Module):
 
     def forward(self, input, target):
         # Count the number of positives and negatives in the batch
-        num_positives = target.sum() + self.epsilon
-        num_negatives = target.numel() - num_positives + self.epsilon
+        raw_positives = target.sum()
+        raw_negatives = target.numel() - raw_positives
+        num_positives = raw_positives + self.epsilon
+        num_negatives = raw_negatives + self.epsilon
 
         # Calculate the weights for positives and negatives
         total = num_positives + num_negatives
@@ -178,7 +180,7 @@ class FocalLoss(torch.nn.Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
 
-        assert (alpha is not None) & (
+        assert (alpha is not None) and (
             gamma is not None
         ), "Both gamma and alpha must be provided and neither should be None"
         print(
@@ -202,7 +204,9 @@ class FocalLoss(torch.nn.Module):
         loss = ((1 - pt) ** self.gamma) * BCE_loss
 
         if self.alpha >= 0:
-            alpha_t = self.alpha * target + (1 - self.alpha) * (1 - target)
+            # Use original binary labels for alpha weighting (not smoothed targets)
+            original_target = (target > 0.5).float()
+            alpha_t = self.alpha * original_target + (1 - self.alpha) * (1 - original_target)
             loss = alpha_t * loss
 
         if self.reduction == "mean":

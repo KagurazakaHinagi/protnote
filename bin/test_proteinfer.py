@@ -277,8 +277,8 @@ for loader_name, loader in loaders.items():
     test_metrics = eval_metrics.get_metric_collection_with_regex(
         pattern="f1_m.*",
         threshold=args.threshold,
-        num_labels=label_sample_sizes["test"]
-        if (params["IN_BATCH_SAMPLING"] or params["GRID_SAMPLER"]) is False
+        num_labels=label_sample_sizes[loader_name]
+        if not (params["IN_BATCH_SAMPLING"] or params["GRID_SAMPLER"])
         else None,
     )
 
@@ -292,7 +292,7 @@ for loader_name, loader in loaders.items():
     test_results = defaultdict(list)
 
     mAP_micro = BinaryAUPRC(device="cpu")
-    mAP_macro = MultilabelAUPRC(device="cpu", num_labels=label_sample_sizes["test"])
+    mAP_macro = MultilabelAUPRC(device="cpu", num_labels=label_sample_sizes[loader_name])
 
     with torch.no_grad(), autocast(enabled=True):
         for batch_idx, batch in tqdm(enumerate(loader[0]), total=len(loader[0])):

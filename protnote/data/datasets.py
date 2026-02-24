@@ -47,7 +47,7 @@ class ProteinDataset(Dataset):
             "train",
             "validation",
             "test",
-        ], "dataset_type must be one of 'train', 'val', or 'test'"
+        ], "dataset_type must be one of 'train', 'validation', or 'test'"
 
         # Tokenizer
         self.label_tokenizer = label_tokenizer
@@ -112,18 +112,18 @@ class ProteinDataset(Dataset):
         )
 
         # TODO: This path could be constructed in get_setup
-        INDEX_OUTPUT_PATH = config["LABEL_EMBEDDING_PATH"].split(".")
+        INDEX_OUTPUT_PATH = config["LABEL_EMBEDDING_PATH"].rsplit(".", 1)
         INDEX_OUTPUT_PATH = (
             "_".join([INDEX_OUTPUT_PATH[0], "index"]) + "." + INDEX_OUTPUT_PATH[1]
         )
-        index_mapping = torch.load(INDEX_OUTPUT_PATH)
+        index_mapping = torch.load(INDEX_OUTPUT_PATH, weights_only=False)
         (
             self.label_embeddings_index,
             self.label_embeddings,
             self.label_token_counts,
             self.label_descriptions,
         ) = self._process_label_embedding_mapping(
-            mapping=index_mapping, embeddings=torch.load(config["LABEL_EMBEDDING_PATH"])
+            mapping=index_mapping, embeddings=torch.load(config["LABEL_EMBEDDING_PATH"], weights_only=False)
         )
 
         (
@@ -159,7 +159,7 @@ class ProteinDataset(Dataset):
             )
 
         # In train, remove sequences longer than max_sequence_length
-        if (max_sequence_length is not None) & (self.dataset_type == "train"):
+        if (max_sequence_length is not None) and (self.dataset_type == "train"):
             seq_length_mask = df["sequence"].apply(len) <= max_sequence_length
             num_long_sequences = (~seq_length_mask).sum()
             df = df[seq_length_mask]
@@ -179,7 +179,10 @@ class ProteinDataset(Dataset):
         logging.info(
             f"Extracting vocabularies for {self.dataset_type} from {vocabulary_path}"
         )
-        vocabularies = generate_vocabularies(data=self.data)
+        if vocabulary_path != self.data_path:
+            vocabularies = generate_vocabularies(file_path=vocabulary_path)
+        else:
+            vocabularies = generate_vocabularies(data=self.data)
 
         self.amino_acid_vocabulary = vocabularies["amino_acid_vocab"]
         self.label_vocabulary = vocabularies["label_vocab"]
@@ -283,7 +286,9 @@ class ProteinDataset(Dataset):
         # Select only desired description types and ids from label vocabulary
         mask = (mapping["description_type"].isin(descriptions_considered)) & (
             mapping["id"].isin(self.label_vocabulary)
-        ).values
+        )
+        if hasattr(mask, "values"):
+            mask = mask.values
         mapping = mapping[mask]
         embeddings = embeddings[mask]
 
@@ -429,14 +434,13 @@ class ProteinDataset(Dataset):
         def count_labels(chunk):
             num_positive_labels_chunk = 0
             num_negative_labels_chunk = 0
-            for _, labels in chunk:
-                labels = labels[1:]
+            for _, _, labels in chunk:
                 num_positive = len(labels)
                 num_positive_labels_chunk += num_positive
                 num_negative_labels_chunk += len(self.label_vocabulary) - num_positive
             return num_positive_labels_chunk, num_negative_labels_chunk
 
-        chunk_size = len(self.data) // cpu_count()  # Adjust chunk size if necessary.
+        chunk_size = max(1, len(self.data) // cpu_count())
 
         results = Parallel(n_jobs=-1)(
             delayed(count_labels)(self.data[i : i + chunk_size])
@@ -473,11 +477,11 @@ class ProteinDataset(Dataset):
         ), "Must call calculate_label_frequency first"
 
         label_weights = self.label_frequency.copy()
+        num_labels = len(label_weights.keys())
 
         if inv_freq:
             # Inverse frequency
             total = sum(label_weights.values())
-            num_labels = len(label_weights.keys())
             label_weights = {k: (total / v) ** power for k, v in label_weights.items()}
 
         # When power = 1, normalization is redundant b/c i'm already calcualtating label weighrs with "total" for frequency, rather than total_per_label. This already gives proper distribution
@@ -524,7 +528,6 @@ def calculate_sequence_weights(data: list, label_inv_freq: dict, aggregation: st
 
     sequence_weights = []
     for _, _, labels in data:
-        labels = labels[1:]  # Assuming the first element is not a label
         sequence_weight = pd.Series(
             [label_inv_freq.get(label, 0) for label in labels]
         ).agg(aggregation)

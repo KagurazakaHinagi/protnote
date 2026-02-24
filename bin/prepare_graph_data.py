@@ -129,7 +129,7 @@ def _process_one(seq_id: str) -> dict:
         atom_array = ctx["parse_structure"](cif_path)
 
         # Filter out amino-acid Atoms with corresponding chain
-        atom_array = ctx["extract_aa_residue_by_chain_ids"](atom_array, struct_info.get("chain_ids", "A"))
+        atom_array = ctx["extract_aa_residue_by_chain_ids"](atom_array, struct_info.get("chain_ids", ["A"]))
 
         if atom_array.array_length() == 0:
             return {"seq_id": seq_id, "status": "failed", "reason": "empty_structure"}
