@@ -24,7 +24,7 @@ import pickle
 import shutil
 import json
 from collections import defaultdict
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from torch.nn.utils import clip_grad_norm_
 from transformers import BatchEncoding
 from protnote.utils.models import biogpt_train_last_n_layers, save_checkpoint, load_model
@@ -177,7 +177,7 @@ class ProtNoteTrainer:
             opt_name=config["params"]["OPTIMIZER"], lr=config["params"]["LEARNING_RATE"]
         )
 
-        self.scaler = GradScaler()
+        self.scaler = GradScaler("cuda")
         self.base_model_path = self._get_saved_model_base_path()
         self.model_path_best_metric = self.base_model_path + f"_best_val_metric.pt"
         self.model_path_best_loss = self.base_model_path + f"_best_val_loss.pt"
@@ -330,7 +330,7 @@ class ProtNoteTrainer:
             }
 
         # Forward pass
-        with autocast():
+        with autocast(device_type="cuda"):
             logits, embeddings = self.model(**inputs, save_embeddings=return_embeddings)
             loss = self.loss_fn(logits, label_multihots.float())
 
@@ -820,7 +820,7 @@ class ProtNoteTrainer:
                 }
 
             # Forward pass
-            with autocast():
+            with autocast(device_type="cuda"):
                 logits, _ = self.model(**inputs)
 
                 # Compute loss, normalized by the number of gradient accumulation steps

@@ -1,6 +1,12 @@
 import os
 import logging
-from torchdata.datapipes.iter import FileLister, FileOpener
+try:
+    from torchdata.datapipes.iter import FileLister, FileOpener
+except ImportError:
+    raise ImportError(
+        "This legacy script requires 'torchdata' which is no longer a project dependency. "
+        "Install it manually with: pip install torchdata==0.8.0"
+    )
 import argparse
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord

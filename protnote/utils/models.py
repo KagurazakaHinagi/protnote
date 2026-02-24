@@ -3,7 +3,7 @@ import logging
 import re
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 from collections import OrderedDict
 import loralib as lora
 
@@ -202,7 +202,7 @@ def get_label_embeddings(
     grad_ctx = torch.no_grad() if not requires_grad else torch.enable_grad()
 
     if total_labels <= batch_size_limit:
-        with autocast(), grad_ctx:
+        with autocast(device_type="cuda"), grad_ctx:
             sequence_embeddings = model(
                 input_ids=tokenized_labels["input_ids"],
                 attention_mask=tokenized_labels["attention_mask"],
@@ -234,7 +234,7 @@ def get_label_embeddings(
         all_label_embeddings = []
         for idx, batch in enumerate(dataloader):
             input_ids, attention_mask = batch
-            with autocast(), grad_ctx:
+            with autocast(device_type="cuda"), grad_ctx:
                 sequence_embeddings = model(
                     input_ids=input_ids, attention_mask=attention_mask
                 ).last_hidden_state

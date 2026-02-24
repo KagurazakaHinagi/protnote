@@ -12,7 +12,7 @@ import re
 from collections import defaultdict
 from protnote.utils.losses import FocalLoss
 from torcheval.metrics import MultilabelAUPRC, BinaryAUPRC
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 from protnote.utils.data import generate_vocabularies
 
 from hydra import compose, initialize_config_dir
@@ -294,7 +294,7 @@ for loader_name, loader in loaders.items():
     mAP_micro = BinaryAUPRC(device="cpu")
     mAP_macro = MultilabelAUPRC(device="cpu", num_labels=label_sample_sizes[loader_name])
 
-    with torch.no_grad(), autocast(enabled=True):
+    with torch.no_grad(), autocast(device_type="cuda", enabled=True):
         for batch_idx, batch in tqdm(enumerate(loader[0]), total=len(loader[0])):
             # Unpack the validation or testing batch
             (
