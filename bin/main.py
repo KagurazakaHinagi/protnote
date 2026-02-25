@@ -571,13 +571,14 @@ def train_validate_test(gpu, cfg, world_size, trial_callback=None, result_metric
                 if run.amlt and run.mlflow:
                     mlflow.log_metrics(validation_metrics)
 
-            # Close metric loggers
-            if run.wandb_project is not None:
-                wandb.finish()
+            # Close metric loggers (wandb.finish moved to finally block)
             if run.amlt and run.mlflow:
                 mlflow.end_run()
 
     finally:
+        # Close W&B run (must happen before logger cleanup)
+        if is_master and run.wandb_project is not None and wandb.run is not None:
+            wandb.finish()
         # Loggers
         handlers = logger.handlers[:]
         for handler in handlers:
