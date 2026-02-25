@@ -20,28 +20,30 @@ from omegaconf import DictConfig, OmegaConf
 from bin.main import train_validate_test
 
 
-def _make_trial_callback(report_epoch, report_metric, prune_flag):
-    """Create a picklable trial callback using shared memory.
+class _SharedMemoryCallback:
+    """Picklable trial callback using shared memory for multi-GPU.
 
-    This callback runs inside the DDP child process (rank 0). It writes
-    the metric to shared memory so the parent process can call
-    trial.report() and trial.should_prune(). The parent sets prune_flag
-    to signal the child to raise TrialPruned.
+    Writes metric to shared memory so the parent can poll. The parent
+    process sets prune_flag to signal the child to raise TrialPruned.
+
+    This is a module-level class (not a closure) so it can be pickled
+    by mp.spawn.
     """
 
-    def trial_callback(epoch, metric):
-        report_epoch.value = epoch
-        report_metric.value = metric
-        # Parent will check should_prune and set prune_flag before next epoch
-        if prune_flag.value:
-            raise optuna.exceptions.TrialPruned()
+    def __init__(self, report_epoch, report_metric, prune_flag):
+        self.report_epoch = report_epoch
+        self.report_metric = report_metric
+        self.prune_flag = prune_flag
 
-    return trial_callback
+    def __call__(self, epoch, metric):
+        self.report_epoch.value = epoch
+        self.report_metric.value = metric
+        if self.prune_flag.value:
+            raise optuna.exceptions.TrialPruned()
 
 
 def _make_objective(cfg):
     """Create an Optuna objective function that wraps the training pipeline."""
-    # Capture original run name to avoid compounding trial numbers
     original_run_name = cfg.run.name
 
     def objective(trial):
@@ -68,19 +70,11 @@ def _make_objective(cfg):
         run = trial_cfg.run
         trial_number = trial.number
 
-        # Tag W&B run with trial number (use original name to avoid compounding)
+        # Tag W&B run with trial number
         if run.wandb_project is not None:
             OmegaConf.update(
                 trial_cfg, "run.name", f"{original_run_name}_trial_{trial_number}"
             )
-
-        # --- Shared memory for parent-child communication ---
-        result_metric = mp.Value("d", 0.0)
-        report_epoch = mp.Value("i", 0)
-        report_metric = mp.Value("d", 0.0)
-        prune_flag = mp.Value(ctypes.c_bool, False)
-
-        trial_callback = _make_trial_callback(report_epoch, report_metric, prune_flag)
 
         # --- Set up DDP environment ---
         world_size = run.gpus * run.nodes
@@ -90,13 +84,48 @@ def _make_objective(cfg):
                 s.bind(("", 0))
                 os.environ["MASTER_PORT"] = str(s.getsockname()[1])
 
-        # --- Run training ---
+        # --- Shared metric for returning result from rank 0 ---
+        result_metric = mp.Value("d", 0.0)
+
+        # --- Build callback and run training ---
         try:
-            mp.spawn(
-                train_validate_test,
-                nprocs=run.gpus,
-                args=(trial_cfg, world_size, trial_callback, result_metric),
-            )
+            if world_size == 1:
+                # Single-GPU: call directly (no spawn, no pickle constraints).
+                # The trial_callback closure works because there's no serialization.
+                def trial_callback(epoch, metric):
+                    trial.report(metric, epoch)
+                    if trial.should_prune():
+                        raise optuna.exceptions.TrialPruned()
+
+                train_validate_test(
+                    gpu=0,
+                    cfg=trial_cfg,
+                    world_size=1,
+                    trial_callback=trial_callback,
+                    result_metric=result_metric,
+                )
+            else:
+                # Multi-GPU: use picklable shared-memory callback.
+                # Pruning is deferred: the child writes metrics, and
+                # prune_flag can be set between trials (not mid-epoch).
+                report_epoch = mp.Value("i", 0)
+                report_metric_shm = mp.Value("d", 0.0)
+                prune_flag = mp.Value(ctypes.c_bool, False)
+
+                callback = _SharedMemoryCallback(
+                    report_epoch, report_metric_shm, prune_flag
+                )
+
+                mp.spawn(
+                    train_validate_test,
+                    nprocs=run.gpus,
+                    args=(trial_cfg, world_size, callback, result_metric),
+                )
+
+                # Report the last metric to Optuna (parent-side)
+                if report_epoch.value > 0:
+                    trial.report(report_metric_shm.value, report_epoch.value)
+
         except optuna.exceptions.TrialPruned:
             raise
         except RuntimeError as e:

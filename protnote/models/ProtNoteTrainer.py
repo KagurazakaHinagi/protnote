@@ -1005,21 +1005,23 @@ class ProtNoteTrainer:
                     only_represented_labels=only_represented_labels,
                 )
 
-                # Optuna trial callback: report metric and check for pruning.
-                # Broadcast stop signal to all DDP ranks so they exit together.
-                if self.trial_callback is not None and dist.is_initialized():
-                    should_stop = torch.tensor([0], device=self.device)
-                    if self.is_master:
-                        try:
-                            self.trial_callback(epoch, self.best_val_metric)
-                        except Exception:
-                            should_stop.fill_(1)
-                    dist.broadcast(should_stop, src=0)
-                    if should_stop.item():
-                        from optuna.exceptions import TrialPruned
-                        raise TrialPruned()
-                elif self.trial_callback is not None and self.is_master:
-                    self.trial_callback(epoch, self.best_val_metric)
+                # Optuna HPO: report metric and check for pruning.
+                if self.trial_callback is not None:
+                    if dist.is_initialized() and dist.get_world_size() > 1:
+                        # Multi-GPU: broadcast stop signal to all ranks
+                        should_stop = torch.tensor([0], device=self.device)
+                        if self.is_master:
+                            try:
+                                self.trial_callback(epoch, self.best_val_metric)
+                            except Exception:
+                                should_stop.fill_(1)
+                        dist.broadcast(should_stop, src=0)
+                        if should_stop.item():
+                            from optuna.exceptions import TrialPruned
+                            raise TrialPruned()
+                    elif self.is_master:
+                        # Single-GPU: call directly
+                        self.trial_callback(epoch, self.best_val_metric)
 
                 self.logger.info(
                     f"Epoch {epoch}/{self.starting_epoch + self.num_epochs - 1}, Batch {self.training_step}, Training Loss: {train_metrics['train_loss']}"
