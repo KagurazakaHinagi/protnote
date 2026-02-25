@@ -1041,14 +1041,20 @@ class ProtNoteTrainer:
                         wandb.save(os.path.basename(epoch_model_path))
 
         if self.is_master:
-            self.logger.info(
-                f"Restoring model to best validation {val_optimization_metric_name}..."
-            )
-            load_model(
-                trainer=self,
-                rank=self.rank,
-                checkpoint_path=self.model_path_best_metric,
-            )
+            if os.path.exists(self.model_path_best_metric):
+                self.logger.info(
+                    f"Restoring model to best validation {val_optimization_metric_name}..."
+                )
+                load_model(
+                    trainer=self,
+                    rank=self.rank,
+                    checkpoint_path=self.model_path_best_metric,
+                )
+            else:
+                self.logger.warning(
+                    f"Best validation checkpoint not found at {self.model_path_best_metric}. "
+                    f"Keeping last epoch weights. This usually means validation metrics never improved from 0."
+                )
 
             # Broadcast model state to other processes
             if dist.is_initialized():

@@ -202,9 +202,10 @@ class StructuralProteinEncoder(nn.Module):
             ]
         )
         # Map pooled hidden_nf -> protein_embedding_dim (e.g. 1100 for ProtNote W_p)
+        # Use LayerNorm instead of BatchNorm1d to support batch_size=1
         self.projection = nn.Sequential(
             nn.Linear(hidden_nf, 256),
-            nn.BatchNorm1d(256),
+            nn.LayerNorm(256),
             nn.LeakyReLU(),
             nn.Linear(256, protein_embedding_dim),
         )
@@ -220,7 +221,9 @@ class StructuralProteinEncoder(nn.Module):
         for gcl in self.gcl_layers:
             h, x, _ = gcl(h, batch.edge_index, x, edge_attr=batch.edge_s)
         out = torch_scatter.scatter_max(h, batch.batch, dim=0)[0].float()
-        return self.projection(out)
+        out = torch.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+        with torch.amp.autocast("cuda", enabled=False):
+            return self.projection(out)
 
     def forward_atom_level(
         self,
@@ -266,7 +269,12 @@ class StructuralProteinEncoder(nn.Module):
         # Global max pooling per protein
         out = torch_scatter.scatter_max(h, atom_to_protein, dim=0, dim_size=num_proteins)[0].float()
 
-        return self.projection(out)
+        # Guard against -inf from scatter_max (proteins with no atoms get -inf fill)
+        out = torch.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Run projection in float32 to avoid autocast float16 overflow in BatchNorm
+        with torch.amp.autocast("cuda", enabled=False):
+            return self.projection(out)
 
     def get_embeddings(self, batch_or_data=None, **kwargs):
         """
