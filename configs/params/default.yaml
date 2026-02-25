@@ -15,7 +15,7 @@ INV_FREQUENCY_POWER: 0.5 #Used for weighted sampling AND relevant losses with we
 SEQUENCE_WEIGHT_AGG: sum #The aggregation to calculate sequence weight from applicable label weights.
 SAMPLING_LOWER_CLAMP_BOUND: null # Lower bound for when clamping sampling weights
 SAMPLING_UPPER_CLAMP_BOUND: null # Upper bound for when clamping sampling weights
-TRAIN_LABEL_SAMPLE_SIZE: null # 15K for both. IS ALSO USED WITH GRID SAMPLER
+TRAIN_LABEL_SAMPLE_SIZE: null # FIXME: Keep null. Label subsampling causes a shape mismatch in per-label TP/FN/FP accumulators.
 VALIDATION_LABEL_SAMPLE_SIZE: null # use all labels in validation
 
 # Inference
