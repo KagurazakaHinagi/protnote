@@ -4,6 +4,7 @@ defaults:
   - encoder/structural: default
   - paths: default
   - remote: default
+  - hpo: default
   - _self_
 
 # Runtime settings (previously argparse-only in main.py)

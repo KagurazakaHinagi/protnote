@@ -103,6 +103,7 @@ class ProtNoteTrainer:
         use_amlt: bool = False,
         is_master: bool = True,
         starting_epoch: int = 1,
+        trial_callback=None,
     ):
         """
         Args:
@@ -130,6 +131,7 @@ class ProtNoteTrainer:
         self.best_val_metric = 0.0  # WARNING: Assumes higher is better
         self.best_val_loss = float("inf")
         self.starting_epoch = starting_epoch
+        self.trial_callback = trial_callback
         self.epoch = starting_epoch
         self.config = config
         self.num_epochs = config["params"]["NUM_EPOCHS"]
@@ -1002,6 +1004,22 @@ class ProtNoteTrainer:
                     val_optimization_metric_name=val_optimization_metric_name,
                     only_represented_labels=only_represented_labels,
                 )
+
+                # Optuna trial callback: report metric and check for pruning.
+                # Broadcast stop signal to all DDP ranks so they exit together.
+                if self.trial_callback is not None and dist.is_initialized():
+                    should_stop = torch.tensor([0], device=self.device)
+                    if self.is_master:
+                        try:
+                            self.trial_callback(epoch, self.best_val_metric)
+                        except Exception:
+                            should_stop.fill_(1)
+                    dist.broadcast(should_stop, src=0)
+                    if should_stop.item():
+                        from optuna.exceptions import TrialPruned
+                        raise TrialPruned()
+                elif self.trial_callback is not None and self.is_master:
+                    self.trial_callback(epoch, self.best_val_metric)
 
                 self.logger.info(
                     f"Epoch {epoch}/{self.starting_epoch + self.num_epochs - 1}, Batch {self.training_step}, Training Loss: {train_metrics['train_loss']}"
