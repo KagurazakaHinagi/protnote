@@ -21,7 +21,7 @@ ml = [
     "torcheval==0.0.7",
     "tensorboard==2.16.2",
     "transformers==4.40.0",
-    "wandb==0.15.11",
+    "wandb==0.25.0",
     "sacremoses==0.0.53",
     "pynvml==11.5.0",
     "azureml-mlflow==1.53.0",
