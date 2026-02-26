@@ -20,7 +20,7 @@ For data preparation (downloading, preprocessing, embedding generation), see the
 
 ## 1. Prerequisites
 
-- **Hardware**: NVIDIA GPU with CUDA 11.8+
+- **Hardware**: NVIDIA GPU with CUDA 12.9+
 - **Software**: Python 3.10+, [Pixi](https://pixi.sh/) package manager
 - **Platform**: Linux (x86_64)
 - **Data**: Complete the [Data Preparation Guide](data_guide.md) before training
@@ -39,7 +39,7 @@ The project defines two pixi environments:
 pixi shell
 ```
 
-This installs PyTorch 2.4.0, Hydra, OmegaConf, transformers, ESM-C, AtomWorks, and all other dependencies defined in `pyproject.toml`.
+This installs PyTorch 2.7.1, Hydra, OmegaConf, transformers, ESM-C, AtomWorks, and all other dependencies defined in `pyproject.toml`.
 
 ## 3. Configuration System
 
@@ -53,12 +53,16 @@ configs/
   params/
     default.yaml               # Training hyperparameters
   encoder/
-    proteinfer.yaml            # ProteInfer CNN constants
-    structural.yaml            # EGNN structural encoder settings
+    proteinfer/
+      default.yaml             # ProteInfer CNN constants
+    structural/
+      default.yaml             # EGNN structural encoder settings
   paths/
     default.yaml               # Data and output paths (relative)
   remote/
     default.yaml               # Remote URLs (HuggingFace, AlphaFold DB)
+  <!--hpo/
+    default.yaml               # Optuna HPO settings-->
 ```
 
 ### 3.2 Runtime Settings (`config.yaml` → `run:`)
@@ -134,6 +138,9 @@ These control what the training script does:
 | `EGNN_HIDDEN_DIM` | `256` | EGNN hidden dimension |
 | `EGNN_N_LAYERS` | `4` | Number of EGNN layers |
 | `EGNN_OUT_DIM` | `256` | EGNN output dimension |
+| `TRAIN_PROTEIN_ENCODER` | `true` | Train the hybrid encoder (EGNN layers) |
+| `PRETRAINED_SEQUENCE_ENCODER` | `false` | Load pretrained ProteInfer weights (legacy encoder only) |
+| `TRAIN_SEQUENCE_ENCODER` | `true` | Train ProteInfer CNN (legacy encoder only; `false` = freeze) |
 | `LORA` | `true` | Enable LoRA for label encoder |
 | `LORA_RANK` | `4` | LoRA rank |
 | `LABEL_ENCODER_NUM_TRAINABLE_LAYERS` | `0` | Trainable layers in E5 (0 = frozen) |
@@ -167,15 +174,13 @@ Path names referenced in CLI arguments map to relative paths under `data/`:
 
 | Key | Path |
 |-----|------|
-| `TRAIN_DATA_PATH` | `swissprot/proteinfer_splits/random/train_GO.fasta` |
-| `VAL_DATA_PATH` | `swissprot/proteinfer_splits/random/dev_GO.fasta` |
-| `TEST_DATA_PATH` | `swissprot/proteinfer_splits/random/test_GO.fasta` |
-| `FULL_DATA_PATH` | `swissprot/proteinfer_splits/random/full_GO.fasta` |
-| `TRAIN_DATA_PATH_ZERO_SHOT` | `swissprot/proteinfer_splits/random/fake_train_GO_zero_shot.fasta` |
-| `VAL_DATA_PATH_ZERO_SHOT` | `swissprot/proteinfer_splits/random/fake_dev_GO_zero_shot.fasta` |
-| `TEST_DATA_PATH_ZERO_SHOT` | `zero_shot/GO_swissprot_jul_2024.fasta` |
-| `GO_ANNOTATIONS_PATH` | `annotations/go_annotations_jul_2024.pkl` |
-| `GO_BASE_LABEL_EMBEDDING_PATH` | `embeddings/frozen_label_embeddings.pt` |
+| `TRAIN_DATA_PATH` | `sequences/uniprot_sprot_2025_01_with_struct/splits/train_GO.fasta` |
+| `VAL_DATA_PATH` | `sequences/uniprot_sprot_2025_01_with_struct/splits/dev_GO.fasta` |
+| `TEST_DATA_PATH` | `sequences/uniprot_sprot_2025_01_with_struct/splits/test_GO.fasta` |
+| `FULL_DATA_PATH` | `sequences/uniprot_sprot_2025_01_with_struct/full_GO.fasta` |
+| `GO_ANNOTATIONS_PATH` | `annotations/go_annotations_2025_02_06.pkl` |
+| `GO_BASE_LABEL_EMBEDDING_PATH` | `embeddings/go_frozen_label_embeddings_2025_02_06.pt` |
+| `PROTEINFER_GO_WEIGHTS_PATH` | `models/proteinfer/GO_model_weights13703706.pkl` |
 
 ### 3.5 Overriding Config at the Command Line
 
@@ -230,7 +235,11 @@ python bin/main.py \
 
 ### 4.2 Supervised Training (Legacy ProteInfer Encoder)
 
-For sequence-only training without structure data:
+For sequence-only training without structure data. There are two modes:
+
+**4.2a. Train ProteInfer from scratch (default for `use_sequence_encoder`):**
+
+All ProteInfer CNN weights are randomly initialized and trained end-to-end (141.6M trainable params).
 
 ```bash
 python bin/main.py \
@@ -241,6 +250,27 @@ python bin/main.py \
     run.use_sequence_encoder=true \
     run.name=protnote_cnn
 ```
+
+**4.2b. Frozen pretrained ProteInfer (original ProtNote setup):**
+
+Load pretrained ProteInfer weights and freeze them — only projection heads and output MLP are trained (75.8M trainable params). This requires the pretrained weights file at `data/models/proteinfer/GO_model_weights13703706.pkl` (configured via `PROTEINFER_GO_WEIGHTS_PATH` in `paths/default.yaml`).
+
+```bash
+python bin/main.py \
+    run.train_path_name=TRAIN_DATA_PATH \
+    run.validation_path_name=VAL_DATA_PATH \
+    run.test_paths_names='[TEST_DATA_PATH]' \
+    run.full_path_name=FULL_DATA_PATH \
+    run.use_sequence_encoder=true \
+    params.PRETRAINED_SEQUENCE_ENCODER=true \
+    params.TRAIN_SEQUENCE_ENCODER=false \
+    run.name=protnote_cnn_frozen
+```
+
+| Mode | `PRETRAINED_SEQUENCE_ENCODER` | `TRAIN_SEQUENCE_ENCODER` | Trainable Params |
+|------|-------------------------------|--------------------------|------------------|
+| Train from scratch | `false` (default) | `true` (default) | 141.6M |
+| Frozen pretrained | `true` | `false` | 75.8M |
 
 ### 4.3 Zero-Shot Training
 
@@ -387,7 +417,7 @@ Run sequence similarity baseline using BLAST:
 
 ```bash
 python bin/run_blast.py \
-    --test-data-path data/swissprot/proteinfer_splits/random/test_GO.fasta
+    --test-data-path data/sequences/uniprot_sprot_2025_01_with_struct/splits/test_GO.fasta
 ```
 
 **Options:**
