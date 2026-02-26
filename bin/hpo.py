@@ -59,6 +59,9 @@ def _make_objective(cfg):
             ),
             "CLIP_VALUE": trial.suggest_float("CLIP_VALUE", 0.5, 5.0),
             "NUM_EPOCHS": trial.suggest_int("NUM_EPOCHS", 10, 30),
+            "FOCAL_LOSS_ALPHA": trial.suggest_categorical(
+                "FOCAL_LOSS_ALPHA", [-1, 0.25, 0.5, 0.75]
+            ),
         }
 
         if use_hybrid:

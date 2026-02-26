@@ -35,6 +35,7 @@ Pre-computed data required:
 | `GRADIENT_ACCUMULATION_STEPS` | categorical | {1, 2, 4} | — |
 | `CLIP_VALUE` | float | [0.5, 5.0] | uniform |
 | `NUM_EPOCHS` | int | [10, 30] | uniform |
+| `FOCAL_LOSS_ALPHA` | categorical | {-1, 0.25, 0.5, 0.75} | — |
 | `MAX_ATOMS_PER_BATCH` | categorical | {10000, 15000, 20000, 30000} | — |
 
 **Optimization target:** `validation_f1_macro` (maximize)
