@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.amp import autocast
 from torchvision.ops import MLP
 
 from protnote.utils.models import get_label_embeddings
@@ -277,18 +278,21 @@ class ProtNote(nn.Module):
 
         elif self.feature_fusion.startswith("concatenation"):
             joint_embeddings = self._get_joint_embeddings(P_e, L_e, num_sequences, num_labels)
-            # Feed through MLP to get logits
-
+            # Feed through MLP to get logits.
+            # Run in fp32 to prevent NaN from fp16 overflow in the
+            # BatchNorm1d + Linear chain inside the output MLP.
             if not save_embeddings:
-                logits = self.output_layer(joint_embeddings)
+                with autocast("cuda", enabled=False):
+                    logits = self.output_layer(joint_embeddings.float())
             else:
-                output_layer_embeddings = joint_embeddings
-                if len(self.output_layer) > 1:
-                    for i, layer in enumerate(self.output_layer):
-                        output_layer_embeddings = layer(output_layer_embeddings)
-                        if i == len(self.output_layer) - 2:
-                            break
-                logits = self.output_layer[-1](output_layer_embeddings)
+                with autocast("cuda", enabled=False):
+                    output_layer_embeddings = joint_embeddings.float()
+                    if len(self.output_layer) > 1:
+                        for i, layer in enumerate(self.output_layer):
+                            output_layer_embeddings = layer(output_layer_embeddings)
+                            if i == len(self.output_layer) - 2:
+                                break
+                    logits = self.output_layer[-1](output_layer_embeddings)
 
         else:
             raise ValueError("feature fusion method not implemented")

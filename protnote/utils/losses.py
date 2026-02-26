@@ -199,13 +199,22 @@ class FocalLoss(torch.nn.Module):
                 + (1 - target) * negative_smoothed_labels
             )
 
-        BCE_loss = torch.nn.BCEWithLogitsLoss(reduction="none")(input, target)
+        # Cast to float32 and clamp to prevent NaN from fp16 overflow.
+        # Under autocast, logits arrive as fp16 (max ~65504). When the
+        # model becomes confident, logits can overflow fp16 to inf.
+        # Casting to fp32 alone doesn't help because inf persists.
+        # Clamping to ±50 is safe: sigmoid(50) ≈ 1.0 to machine precision,
+        # so larger values carry no additional information for BCE.
+        input_f32 = input.float().clamp(-50, 50)
+        target_f32 = target.float()
+
+        BCE_loss = F.binary_cross_entropy_with_logits(input_f32, target_f32, reduction="none")
         pt = torch.exp(-BCE_loss)
         loss = ((1 - pt) ** self.gamma) * BCE_loss
 
         if self.alpha >= 0:
             # Use original binary labels for alpha weighting (not smoothed targets)
-            original_target = (target > 0.5).float()
+            original_target = (target_f32 > 0.5).float()
             alpha_t = self.alpha * original_target + (1 - self.alpha) * (1 - original_target)
             loss = alpha_t * loss
 
