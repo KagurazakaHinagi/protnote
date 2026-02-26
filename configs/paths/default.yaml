@@ -31,6 +31,8 @@ data_paths:
   EC_BASE_LABEL_EMBEDDING_PATH: embeddings/ec_frozen_label_embeddings.pt # this is the base path which is modified by POOLING_METHOD
 
   # ProteInfer paths
+  PROTEINFER_GO_WEIGHTS_PATH: models/proteinfer/GO_model_weights13703706.pkl
+  PROTEINFER_EC_WEIGHTS_PATH: models/proteinfer/EC_model_weights13703966.pkl
   PARENTHOOD_LIB_PATH: vocabularies/parenthood_2025_02_06.json
   PARENTHOOD_GO_LIB_PATH: vocabularies/parenthood_2025_02_06_go.json
 

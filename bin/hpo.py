@@ -48,6 +48,8 @@ def _make_objective(cfg):
 
     def objective(trial):
         # --- Suggest hyperparameters ---
+        use_hybrid = not cfg.run.use_sequence_encoder
+
         suggested = {
             "LEARNING_RATE": trial.suggest_float("LEARNING_RATE", 1e-5, 1e-2, log=True),
             "WEIGHT_DECAY": trial.suggest_float("WEIGHT_DECAY", 1e-6, 1e-2, log=True),
@@ -56,11 +58,19 @@ def _make_objective(cfg):
                 "GRADIENT_ACCUMULATION_STEPS", [1, 2, 4]
             ),
             "CLIP_VALUE": trial.suggest_float("CLIP_VALUE", 0.5, 5.0),
-            "NUM_EPOCHS": trial.suggest_int("NUM_EPOCHS", 15, 50),
-            "TRAIN_BATCH_SIZE": trial.suggest_categorical(
-                "TRAIN_BATCH_SIZE", [4, 8, 16, 32]
-            ),
+            "NUM_EPOCHS": trial.suggest_int("NUM_EPOCHS", 10, 30),
         }
+
+        if use_hybrid:
+            # Hybrid encoder uses dynamic batching by atom count
+            suggested["MAX_ATOMS_PER_BATCH"] = trial.suggest_categorical(
+                "MAX_ATOMS_PER_BATCH", [10000, 15000, 20000, 30000]
+            )
+        else:
+            # Legacy ProteInfer uses fixed batch sizes
+            suggested["TRAIN_BATCH_SIZE"] = trial.suggest_categorical(
+                "TRAIN_BATCH_SIZE", [2, 4, 8]
+            )
 
         # --- Override config with suggested values ---
         trial_cfg = cfg.copy()

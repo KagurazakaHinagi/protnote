@@ -1,5 +1,5 @@
 # Optuna hyperparameter optimization settings
-n_trials: 50            # Number of HPO trials to run
+n_trials: 20            # Number of HPO trials to run
 timeout: null           # Timeout in seconds (null = no timeout)
 study_name: null        # Study name (null = auto-generate from run.name + timestamp)
 n_startup_trials: 5     # Random sampling trials before TPE kicks in

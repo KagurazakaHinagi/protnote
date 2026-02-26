@@ -13,6 +13,8 @@ Integrate Optuna into ProtNote's training pipeline to automatically search for o
 
 ## Search Space
 
+Shared across both encoder modes:
+
 | Parameter | Type | Range | Scale |
 |-----------|------|-------|-------|
 | `LEARNING_RATE` | float | [1e-5, 1e-2] | log |
@@ -20,8 +22,14 @@ Integrate Optuna into ProtNote's training pipeline to automatically search for o
 | `OPTIMIZER` | categorical | {Adam, AdamW} | — |
 | `GRADIENT_ACCUMULATION_STEPS` | categorical | {1, 2, 4} | — |
 | `CLIP_VALUE` | float | [0.5, 5.0] | uniform |
-| `NUM_EPOCHS` | int | [15, 50] | — |
-| `TRAIN_BATCH_SIZE` | categorical | {4, 8, 16, 32} | — |
+| `NUM_EPOCHS` | int | [10, 30] | — |
+
+Encoder-specific batching:
+
+| Encoder | Parameter | Type | Range |
+|---------|-----------|------|-------|
+| Hybrid (ESM-C + EGNN) | `MAX_ATOMS_PER_BATCH` | categorical | {10000, 15000, 20000, 30000} |
+| Legacy (ProteInfer) | `TRAIN_BATCH_SIZE` | categorical | {2, 4, 8} |
 
 **Optimization target:** `validation_f1_macro` (maximize)
 
