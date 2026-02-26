@@ -819,6 +819,13 @@ class ProtNoteTrainer:
                     "label_token_counts": label_token_counts,
                 }
 
+            # Skip single-sample batches: BatchNorm requires batch_size >= 2.
+            # This can happen with dynamic atom-budget batching when one protein
+            # fills the entire MAX_ATOMS_PER_BATCH budget.
+            if label_multihots.size(0) < 2:
+                self.training_step -= 1  # don't count skipped batches
+                continue
+
             # Forward pass
             with autocast(device_type="cuda"):
                 logits, _ = self.model(**inputs)
