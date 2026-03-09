@@ -63,8 +63,11 @@ data_paths:
 
   # Local AlphaFoldDB structures (alternative to downloaded CIF files)
   # Files expected as: <LOCAL_AFDB_DIR>/AF-<UNIPROT_ID>-F1-model_<LOCAL_AFDB_SUFFIX>.pdb
-  LOCAL_AFDB_DIR: "structures/atomistica_data_release" # e.g. "structures/local_afdb/"
-  LOCAL_AFDB_SUFFIX: v4_esmfold_v1 # e.g. "v4" → AF-P12345-F1-model_v4.pdb
+  LOCAL_AFDB_DIR: "structures/local_afdb/" # e.g. "structures/local_afdb/"
+  LOCAL_AFDB_SUFFIX: v6 # e.g. "v4" → AF-P12345-F1-model_v4.pdb
+
+  # LigandMPNN checkpoint (relative to project root, NOT data dir)
+  LIGAND_MPNN_CHECKPOINT: bin/mpnn/model_params/ligandmpnn_v_32_010_25.pt
 
 # Paths referenced relative to OUTPUT_PATH (will have "outputs" prepended)
 output_paths:
