@@ -76,6 +76,12 @@ def main():
         default=5000,
         help="Skip sequences longer than this.",
     )
+    parser.add_argument(
+        "--paths",
+        type=str,
+        default=None,
+        help="Hydra paths config to use (e.g. 'mpnn_toxin'). Defaults to 'default'.",
+    )
     args = parser.parse_args()
 
     from hydra import compose, initialize_config_dir
@@ -84,8 +90,9 @@ def main():
     project_root = get_project_root()
     register_resolvers()
     GlobalHydra.instance().clear()
+    overrides = [f"paths={args.paths}"] if args.paths else []
     with initialize_config_dir(version_base=None, config_dir=str(project_root / "configs")):
-        cfg = compose(config_name="config")
+        cfg = compose(config_name="config", overrides=overrides)
 
     DATA_PATH = project_root / "data"
 

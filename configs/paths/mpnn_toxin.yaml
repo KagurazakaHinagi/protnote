@@ -1,0 +1,22 @@
+# MPNN-designed toxin dataset paths
+# Usage: pixi run python bin/generate_sequence_embeddings.py paths=mpnn_toxin
+#        pixi run python bin/prepare_graph_data.py paths=mpnn_toxin
+
+defaults:
+  - default
+
+data_paths:
+  TEST_DATA_PATH: sequences/mpnn_toxin/test_mpnn_GO.fasta
+
+  # Boltz-predicted structures
+  STRUCTURE_DIR: sequences/mpnn_toxin/
+  STRUCTURE_INDEX_PATH: sequences/mpnn_toxin/structure_index.json
+
+  # ESM-C embeddings for designed sequences
+  ESMC_EMBEDDING_DIR: sequences/mpnn_toxin/embeddings/esmc
+  ESMC_INDEX_PATH: sequences/mpnn_toxin/embeddings/esmc/index.json
+
+  # Processed atom-level graphs
+  PROCESSED_GRAPH_DIR: sequences/mpnn_toxin/processed
+  GRAPH_INDEX_PATH: sequences/mpnn_toxin/processed/graph_index.json
+  GRAPH_ARCHIVE_PATH: sequences/mpnn_toxin/processed/graphs.pngrph
