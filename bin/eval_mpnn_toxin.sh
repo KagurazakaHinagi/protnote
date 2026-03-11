@@ -37,6 +37,7 @@ COMMON_OVERRIDES=(
     "run.model_file=${MODEL_FILE}"
     "run.save_prediction_results=true"
     "run.save_val_test_metrics=true"
+    "run.save_embeddings=true"
     "run.name=mpnn_toxin_eval_${MODEL_NAME}"
     "params.EXTRACT_VOCABULARIES_FROM=null"
     "params.DECISION_TH=0.5"

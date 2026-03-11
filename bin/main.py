@@ -1,7 +1,7 @@
 import json
 import os
-from pathlib import Path
 import socket
+from pathlib import Path
 
 import hydra
 import torch
@@ -82,8 +82,6 @@ def train_validate_test(gpu, cfg, world_size):
     is_master = rank == 0
 
     # Unpack and process the config file
-    if run.model_file:
-        run.model_file = str(project_root / "data" / "models" / "ProtNote" / run.model_file)
     run.save_val_test_metrics_file = str(project_root / "outputs" / "results" / run.save_val_test_metrics_file)
     task = run.annotations_path_name.split("_")[0]
     config = get_setup(cfg, is_master=is_master)
@@ -433,9 +431,7 @@ def train_validate_test(gpu, cfg, world_size):
             rank=rank,
             from_checkpoint=run.from_checkpoint,
         )
-        logger.info(
-            f"Loading model checkpoint from {run.model_file}. If training, will continue from epoch {Trainer.epoch + 1}.\n"
-        )
+        logger.info(f"Loading model checkpoint from {run.model_file}. If training, will continue from epoch {Trainer.epoch + 1}.\n")
 
     # Initialize EvalMetrics
     eval_metrics = EvalMetrics(device=device)
