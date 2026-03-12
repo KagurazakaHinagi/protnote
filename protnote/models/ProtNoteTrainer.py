@@ -1,3 +1,4 @@
+import glob
 import logging
 from protnote.utils.data import log_gpu_memory_usage, read_json
 from protnote.utils.evaluation import (
@@ -552,7 +553,7 @@ class ProtNoteTrainer:
             "labels": [],
             "sequence_ids": [],
         }
-        embeddings_num_batches = 100  # The number of embedding batches to export at a time if return_embedding = True
+        embeddings_num_batches = 5  # The number of embedding batches to export at a time if return_embedding = True
         embeddings_export_dir = os.path.join(
             self.config["paths"]["RESULTS_DIR"],
             f"{data_loader_name}_embeddings_{self.run_name}",
@@ -561,6 +562,17 @@ class ProtNoteTrainer:
             if os.path.exists(embeddings_export_dir):
                 shutil.rmtree(embeddings_export_dir)
             os.mkdir(embeddings_export_dir)
+
+        # Periodic flushing for prediction results to avoid unbounded memory growth
+        results_num_batches = 100
+        results_export_dir = os.path.join(
+            self.config["paths"]["RESULTS_DIR"],
+            f"{data_loader_name}_results_chunks_{self.run_name}",
+        )
+        if save_results:
+            if os.path.exists(results_export_dir):
+                shutil.rmtree(results_export_dir)
+            os.mkdir(results_export_dir)
 
         batch_idx = -1
         with torch.no_grad():
@@ -604,6 +616,23 @@ class ProtNoteTrainer:
                     test_results["logits"].append(logits.cpu())
                     test_results["labels"].append(labels.cpu())
 
+                    if (batch_idx + 1) % results_num_batches == 0:
+                        chunk = {}
+                        for key, val_list in test_results.items():
+                            if key == "sequence_ids":
+                                chunk[key] = [j for i in val_list for j in i]
+                            else:
+                                chunk[key] = torch.cat(val_list).numpy()
+                        torch.save(
+                            chunk,
+                            os.path.join(
+                                results_export_dir,
+                                f"chunk_{batch_idx - results_num_batches + 1}_{batch_idx}.pt",
+                            ),
+                            pickle_protocol=pickle.HIGHEST_PROTOCOL,
+                        )
+                        test_results = defaultdict(list)
+
                 if return_embeddings:
                     all_embeddings["joint_embeddings"].append(
                         embeddings["joint_embeddings"]
@@ -613,8 +642,6 @@ class ProtNoteTrainer:
                     )
                     all_embeddings["labels"].append(labels.cpu())
                     all_embeddings["sequence_ids"].append(sequence_ids)
-
-                    # Export every 100 batches
 
                     if (batch_idx + 1) % embeddings_num_batches == 0:
                         for key, embedding_list in all_embeddings.items():
@@ -671,18 +698,47 @@ class ProtNoteTrainer:
                 )
 
             if save_results:
-                for key in test_results.keys():
+                # Flush any remaining buffered results
+                if any(len(v) > 0 for v in test_results.values()):
+                    chunk = {}
+                    for key, val_list in test_results.items():
+                        if key == "sequence_ids":
+                            chunk[key] = [j for i in val_list for j in i]
+                        else:
+                            chunk[key] = torch.cat(val_list).numpy()
+                    torch.save(
+                        chunk,
+                        os.path.join(
+                            results_export_dir,
+                            f"chunk_{batch_idx - (batch_idx % results_num_batches)}_{batch_idx}.pt",
+                        ),
+                        pickle_protocol=pickle.HIGHEST_PROTOCOL,
+                    )
+                    test_results = defaultdict(list)
+
+                # Reload all chunks and merge for final save
+                merged_results = defaultdict(list)
+                chunk_files = sorted(glob.glob(os.path.join(results_export_dir, "chunk_*.pt")))
+                for chunk_file in chunk_files:
+                    chunk = torch.load(chunk_file, weights_only=False)
+                    for key in chunk:
+                        merged_results[key].append(chunk[key])
+                    del chunk
+
+                final_results = {}
+                for key in merged_results:
                     if key == "sequence_ids":
-                        test_results[key] = np.array(
-                            [j for i in test_results["sequence_ids"] for j in i]
+                        final_results[key] = np.array(
+                            [j for i in merged_results[key] for j in i]
                         )
                     else:
-                        test_results[key] = torch.cat(test_results[key]).numpy()
+                        final_results[key] = np.concatenate(merged_results[key])
+                del merged_results
 
                 self.logger.info("Saving validation results...")
                 if self.is_master:
                     save_evaluation_results(
-                        results=test_results,
+                        results=final_results,
                         label_vocabulary=[
                             i
                             for i, mask in zip(
@@ -696,6 +752,10 @@ class ProtNoteTrainer:
                         data_split_name=data_loader_name,
                         save_as_h5=True
                     )
+                del final_results
+
+                # Clean up chunk files
+                shutil.rmtree(results_export_dir)
 
             # Aggregate the TP, FN, FP across all GPUs
             if dist.is_initialized():
