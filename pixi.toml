@@ -18,6 +18,8 @@ setuptools = "<70"
 
 [pypi-dependencies]
 protnote = { path = ".", editable = true }
+ipymolstar = ">=0.1.0"
+jupyterlab = ">=4.0"
 
 # Linux-specific system libraries
 [target.linux-64.dependencies]
